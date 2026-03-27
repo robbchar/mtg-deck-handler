@@ -1,0 +1,26 @@
+# Runtime data — contents are ignored; directory structure is preserved via
+# .gitkeep files so contributors don't need to create the folders manually.
+# The server also auto-creates these directories on startup (defence-in-depth).
+data/decks/*
+!data/decks/.gitkeep
+data/cache/*
+!data/cache/.gitkeep
+
+# Dependencies
+node_modules/
+
+# Environment secrets
+.env
+
+# Build output
+client/dist/
+client/.vite/
+
+# OS / editor artefacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+npm-debug.log*
+*.stackdump

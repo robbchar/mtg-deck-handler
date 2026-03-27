@@ -1,0 +1,514 @@
+import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import axios from 'axios'
+import DeckEditor from './DeckEditor'
+import { useDecks } from '../hooks/useDecks'
+import { useCards } from '../hooks/useCards'
+
+// ── Module mocks ──────────────────────────────────────────────────────────────
+
+vi.mock('../hooks/useDecks')
+vi.mock('../hooks/useCards')
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
+}))
+
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+  return { ...actual, useNavigate: () => mockNavigate }
+})
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+const DECK = {
+  id: 'test-deck-id',
+  name: 'Mono Red Burn',
+  format: 'standard',
+  notes: 'Go fast.',
+  cards: [
+    { quantity: 4, name: 'Lightning Bolt', scryfall_id: null, section: 'mainboard' },
+    { quantity: 2, name: 'Mountain', scryfall_id: null, section: 'mainboard' },
+  ],
+  sideboard: [
+    { quantity: 2, name: 'Smash to Smithereens', scryfall_id: null, section: 'sideboard' },
+  ],
+  unknown: [],
+  tags: [],
+  created_at: '2024-01-01T00:00:00.000Z',
+  updated_at: '2024-01-01T00:00:00.000Z',
+}
+
+const EMPTY_DECK = {
+  id: 'empty-deck-id',
+  name: 'Empty Deck',
+  format: '',
+  notes: '',
+  cards: [],
+  sideboard: [],
+  unknown: [],
+  tags: [],
+  created_at: '2024-01-01T00:00:00.000Z',
+  updated_at: '2024-01-01T00:00:00.000Z',
+}
+
+/** Default useDecks stub. Override individual fields per-test. */
+function makeUseDecks(overrides = {}) {
+  return {
+    decks: [DECK],
+    loading: false,
+    error: null,
+    getDeck: vi.fn().mockResolvedValue(DECK),
+    updateDeck: vi.fn().mockResolvedValue(DECK),
+    createDeck: vi.fn(),
+    deleteDeck: vi.fn(),
+    ...overrides,
+  }
+}
+
+/** Default useCards stub (satisfies CardSearch requirements). */
+function makeUseCards(overrides = {}) {
+  return {
+    searchCards: vi.fn().mockResolvedValue([]),
+    getCard: vi.fn().mockResolvedValue(null),
+    searching: false,
+    error: null,
+    ...overrides,
+  }
+}
+
+/**
+ * Renders DeckEditor at /deck/:deckId inside the required providers.
+ * Because DeckEditor uses useParams, it must be rendered inside a Route.
+ */
+function renderEditor(deckId = 'test-deck-id') {
+  return render(
+    <MemoryRouter initialEntries={[`/deck/${deckId}`]}>
+      <Routes>
+        <Route path="/deck/:id" element={<DeckEditor />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockNavigate.mockReset()
+  useDecks.mockReturnValue(makeUseDecks())
+  useCards.mockReturnValue(makeUseCards())
+  // Silence clipboard in jsdom (not implemented in test env)
+  Object.assign(navigator, {
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+  })
+})
+
+// ── Renders without crashing ──────────────────────────────────────────────────
+
+describe('DeckEditor — renders without crashing', () => {
+  it('renders without crashing', async () => {
+    renderEditor()
+    // Loading state renders immediately — component should not throw
+    expect(document.body).toBeTruthy()
+  })
+
+  it('renders loading state on mount', () => {
+    // getDeck is async; the component shows a spinner before it resolves
+    useDecks.mockReturnValue(
+      makeUseDecks({ getDeck: vi.fn().mockReturnValue(new Promise(() => {})) }),
+    )
+    renderEditor()
+    expect(screen.getByTestId('deck-editor-loading')).toBeInTheDocument()
+  })
+
+  it('renders the editor once the deck loads', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('deck-editor')).toBeInTheDocument(),
+    )
+  })
+
+  it('renders an error state when getDeck returns null', async () => {
+    useDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(null) }))
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('deck-editor-error')).toBeInTheDocument(),
+    )
+  })
+})
+
+// ── Deck data display ─────────────────────────────────────────────────────────
+
+describe('DeckEditor — deck data display', () => {
+  it('displays the deck name', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('deck-name-heading')).toHaveTextContent('Mono Red Burn'),
+    )
+  })
+
+  it('displays the format in the selector', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('deck-format-select')).toHaveValue('standard'),
+    )
+  })
+
+  it('displays the notes in the textarea', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('notes-textarea')).toHaveValue('Go fast.'),
+    )
+  })
+
+  it('renders a CardRow for each mainboard card', async () => {
+    renderEditor()
+    await waitFor(() => expect(screen.getByTestId('mainboard-section')).toBeInTheDocument())
+    expect(screen.getByText('Lightning Bolt')).toBeInTheDocument()
+    expect(screen.getByText('Mountain')).toBeInTheDocument()
+  })
+
+  it('renders a CardRow for each sideboard card', async () => {
+    renderEditor()
+    await waitFor(() => expect(screen.getByTestId('sideboard-section')).toBeInTheDocument())
+    expect(screen.getByText('Smash to Smithereens')).toBeInTheDocument()
+  })
+
+  it('shows empty mainboard message when no mainboard cards', async () => {
+    useDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(EMPTY_DECK) }))
+    renderEditor('empty-deck-id')
+    await waitFor(() =>
+      expect(screen.getByTestId('mainboard-empty')).toBeInTheDocument(),
+    )
+  })
+
+  it('shows empty sideboard message when no sideboard cards', async () => {
+    useDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(EMPTY_DECK) }))
+    renderEditor('empty-deck-id')
+    await waitFor(() =>
+      expect(screen.getByTestId('sideboard-empty')).toBeInTheDocument(),
+    )
+  })
+})
+
+// ── Inline name editing ───────────────────────────────────────────────────────
+
+describe('DeckEditor — inline name editing', () => {
+  it('shows an input when the name heading is clicked', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-name-heading'))
+    fireEvent.click(screen.getByTestId('deck-name-heading'))
+    expect(screen.getByTestId('deck-name-input')).toBeInTheDocument()
+  })
+
+  it('hides the heading while editing', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-name-heading'))
+    fireEvent.click(screen.getByTestId('deck-name-heading'))
+    expect(screen.queryByTestId('deck-name-heading')).not.toBeInTheDocument()
+  })
+
+  it('saves name and schedules auto-save on blur', async () => {
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-name-heading'))
+    fireEvent.click(screen.getByTestId('deck-name-heading'))
+
+    const input = screen.getByTestId('deck-name-input')
+    fireEvent.change(input, { target: { value: 'New Name' } })
+    fireEvent.blur(input)
+
+    // Heading is restored
+    await waitFor(() => expect(screen.getByTestId('deck-name-heading')).toBeInTheDocument())
+    expect(screen.getByTestId('deck-name-heading')).toHaveTextContent('New Name')
+
+    // Auto-save fires after debounce
+    await waitFor(
+      () =>
+        expect(updateDeck).toHaveBeenCalledWith(
+          'test-deck-id',
+          expect.objectContaining({ name: 'New Name' }),
+        ),
+      { timeout: 2000 },
+    )
+  })
+
+  it('saves name on Enter key', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-name-heading'))
+    fireEvent.click(screen.getByTestId('deck-name-heading'))
+
+    const input = screen.getByTestId('deck-name-input')
+    fireEvent.change(input, { target: { value: 'Enter Name' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('deck-name-heading')).toHaveTextContent('Enter Name'),
+    )
+  })
+
+  it('reverts the name on Escape key', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-name-heading'))
+    fireEvent.click(screen.getByTestId('deck-name-heading'))
+
+    const input = screen.getByTestId('deck-name-input')
+    fireEvent.change(input, { target: { value: 'Abandoned Name' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('deck-name-heading')).toHaveTextContent('Mono Red Burn'),
+    )
+  })
+})
+
+// ── Format selector ───────────────────────────────────────────────────────────
+
+describe('DeckEditor — format selector', () => {
+  it('contains all required format options', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-format-select'))
+
+    const select = screen.getByTestId('deck-format-select')
+    const options = Array.from(select.options).map((o) => o.value)
+
+    expect(options).toContain('standard')
+    expect(options).toContain('pioneer')
+    expect(options).toContain('modern')
+    expect(options).toContain('legacy')
+    expect(options).toContain('vintage')
+    expect(options).toContain('commander')
+    expect(options).toContain('draft')
+  })
+
+  it('schedules auto-save when format changes', async () => {
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-format-select'))
+    fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'modern' } })
+
+    await waitFor(
+      () =>
+        expect(updateDeck).toHaveBeenCalledWith(
+          'test-deck-id',
+          expect.objectContaining({ format: 'modern' }),
+        ),
+      { timeout: 2000 },
+    )
+  })
+})
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+
+describe('DeckEditor — notes', () => {
+  it('renders the notes textarea', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('notes-textarea')).toBeInTheDocument(),
+    )
+  })
+
+  it('schedules auto-save on notes blur', async () => {
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+
+    renderEditor()
+    await waitFor(() => screen.getByTestId('notes-textarea'))
+
+    fireEvent.change(screen.getByTestId('notes-textarea'), {
+      target: { value: 'Updated strategy.' },
+    })
+    fireEvent.blur(screen.getByTestId('notes-textarea'))
+
+    await waitFor(
+      () =>
+        expect(updateDeck).toHaveBeenCalledWith(
+          'test-deck-id',
+          expect.objectContaining({ notes: 'Updated strategy.' }),
+        ),
+      { timeout: 2000 },
+    )
+  })
+})
+
+// ── Quantity controls ─────────────────────────────────────────────────────────
+
+describe('DeckEditor — quantity controls via CardRow', () => {
+  it('increments mainboard quantity via CardRow + button', async () => {
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+
+    renderEditor()
+    await waitFor(() => screen.getByText('Lightning Bolt'))
+
+    const incrementBtns = screen.getAllByTestId('increment-btn')
+    fireEvent.click(incrementBtns[0]) // first mainboard card
+
+    await waitFor(
+      () =>
+        expect(updateDeck).toHaveBeenCalledWith(
+          'test-deck-id',
+          expect.objectContaining({ cards: expect.any(Array) }),
+        ),
+      { timeout: 2000 },
+    )
+  })
+
+  it('removes mainboard card when quantity reaches 0', async () => {
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(
+      makeUseDecks({
+        updateDeck,
+        getDeck: vi.fn().mockResolvedValue({
+          ...DECK,
+          cards: [{ quantity: 1, name: 'Mountain', scryfall_id: null, section: 'mainboard' }],
+          sideboard: [],
+        }),
+      }),
+    )
+
+    renderEditor()
+    await waitFor(() => screen.getByText('Mountain'))
+
+    fireEvent.click(screen.getByTestId('decrement-btn'))
+
+    await waitFor(() => expect(screen.queryByText('Mountain')).not.toBeInTheDocument())
+  })
+
+  it('removes card when the remove button is clicked', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByText('Lightning Bolt'))
+
+    const removeBtns = screen.getAllByTestId('remove-btn')
+    fireEvent.click(removeBtns[0])
+
+    await waitFor(() => expect(screen.queryByText('Lightning Bolt')).not.toBeInTheDocument())
+  })
+})
+
+// ── Add Card button ───────────────────────────────────────────────────────────
+
+describe('DeckEditor — Add Card button', () => {
+  it('renders the Add Card button', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('add-card-btn')).toBeInTheDocument(),
+    )
+  })
+
+  it('opens the CardSearch panel when Add Card is clicked', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('add-card-btn'))
+    fireEvent.click(screen.getByTestId('add-card-btn'))
+    expect(screen.getByTestId('card-search-panel')).toHaveClass('translate-x-0')
+  })
+
+  it('closes the CardSearch panel when the panel close action fires', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('add-card-btn'))
+    fireEvent.click(screen.getByTestId('add-card-btn'))
+    // Close via backdrop
+    fireEvent.click(screen.getByTestId('search-backdrop'))
+    expect(screen.getByTestId('card-search-panel')).toHaveClass('translate-x-full')
+  })
+})
+
+// ── Export button ─────────────────────────────────────────────────────────────
+
+describe('DeckEditor — Export button', () => {
+  it('renders the Export button', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('export-btn')).toBeInTheDocument(),
+    )
+  })
+
+  it('calls the export API and writes to clipboard when clicked', async () => {
+    axios.post.mockResolvedValueOnce({ data: { text: '4 Lightning Bolt\n2 Mountain' } })
+
+    renderEditor()
+    await waitFor(() => screen.getByTestId('export-btn'))
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('export-btn'))
+    })
+
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        expect.stringContaining('Lightning Bolt'),
+      ),
+    )
+  })
+})
+
+// ── Import button ─────────────────────────────────────────────────────────────
+
+describe('DeckEditor — Import button', () => {
+  it('renders the Import button', async () => {
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByTestId('import-btn')).toBeInTheDocument(),
+    )
+  })
+
+  it('opens the ImportModal when Import is clicked', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('import-btn'))
+    fireEvent.click(screen.getByTestId('import-btn'))
+    expect(screen.getByTestId('import-modal')).toBeInTheDocument()
+  })
+
+  it('closes the ImportModal when close action fires', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('import-btn'))
+    fireEvent.click(screen.getByTestId('import-btn'))
+    fireEvent.click(screen.getByTestId('import-modal-close'))
+    expect(screen.queryByTestId('import-modal')).not.toBeInTheDocument()
+  })
+})
+
+// ── Auto-save ─────────────────────────────────────────────────────────────────
+
+describe('DeckEditor — auto-save', () => {
+  it('accumulates multiple field changes into a single debounced updateDeck call', async () => {
+    vi.useFakeTimers()
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+
+    renderEditor()
+    await act(async () => {
+      vi.runAllTimers() // flush the getDeck resolution (it's mocked)
+    })
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    // Trigger two changes quickly — they should be batched
+    fireEvent.change(screen.getByTestId('deck-format-select'), {
+      target: { value: 'legacy' },
+    })
+    fireEvent.change(screen.getByTestId('notes-textarea'), {
+      target: { value: 'New notes' },
+    })
+    fireEvent.blur(screen.getByTestId('notes-textarea'))
+
+    // Flush debounce timer
+    await act(async () => {
+      vi.advanceTimersByTime(1100)
+    })
+
+    expect(updateDeck).toHaveBeenCalledTimes(1)
+    expect(updateDeck).toHaveBeenCalledWith(
+      'test-deck-id',
+      expect.objectContaining({ format: 'legacy', notes: 'New notes' }),
+    )
+
+    vi.useRealTimers()
+  })
+})

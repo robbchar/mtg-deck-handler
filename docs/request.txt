@@ -1,0 +1,18 @@
+You are working on the MTG Deck Manager project. Read ARCHITECTURE.md for the
+full technical spec, then read TASKS.md for your work queue.
+
+Rules:
+1. Work through tasks in order within the current milestone. Do not skip tasks.
+2. Do not start the next milestone — stop and output "MILESTONE COMPLETE: {name}"
+   when you finish the last task in a milestone and all its acceptance criteria pass.
+3. For each task: read the acceptance criteria first, write the code, then verify
+   each criterion before marking the task complete.
+4. If a task depends on another that isn't complete, stop and output
+   "BLOCKED: Task {x} requires Task {y} to be complete first."
+5. Keep TASKS.md updated — change task status to "in-progress" when you start
+   and "complete" when done.
+6. Do not modify ARCHITECTURE.md. If you find an ambiguity, make a reasonable
+   decision and add a comment in the code explaining your choice.
+
+Start by reading both documents, then tell me which milestone you are working on
+and which task you are starting with.

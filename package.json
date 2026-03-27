@@ -1,0 +1,20 @@
+{
+  "name": "mtg-deck-manager",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
+    "start": "node server/index.js",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "npm run test --workspace=server",
+    "test:client": "npm run test --workspace=client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
