@@ -257,7 +257,7 @@ describe('ImportModal — empty textarea validation', () => {
 describe('ImportModal — successful import', () => {
   async function importDeck({
     deckNameValue = 'Mono Red',
-    formatValue = 'Standard',
+    formatValue = 'standard',
     textValue = VALID_TEXT,
   } = {}) {
     axios.post.mockResolvedValueOnce({ data: CREATED_DECK })
@@ -282,16 +282,16 @@ describe('ImportModal — successful import', () => {
     expect(axios.post).toHaveBeenCalledWith('/api/import', {
       text: VALID_TEXT,
       name: 'Mono Red',
-      format: 'Standard',
+      format: 'standard',
     })
   })
 
-  it('trims whitespace from name and format before sending', async () => {
-    await importDeck({ deckNameValue: '  Mono Red  ', formatValue: '  Standard  ' })
+  it('trims whitespace from name before sending', async () => {
+    await importDeck({ deckNameValue: '  Mono Red  ', formatValue: 'modern' })
     expect(axios.post).toHaveBeenCalledWith('/api/import', {
       text: VALID_TEXT,
       name: 'Mono Red',
-      format: 'Standard',
+      format: 'modern',
     })
   })
 

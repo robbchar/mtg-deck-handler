@@ -12,7 +12,7 @@ import DeckEditor from './pages/DeckEditor'
  */
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <DeckProvider>
         <div className="min-h-screen bg-gray-50 text-gray-900">
           <Routes>

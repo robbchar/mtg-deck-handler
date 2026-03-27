@@ -248,7 +248,32 @@ describe('parseMtgaText — invalid quantities', () => {
   });
 });
 
-// ── parseMtgaText — (i) CRLF line endings ────────────────────────────────────
+// ── parseMtgaText — (i) multi-printing deduplication ─────────────────────────
+
+describe('parseMtgaText — multi-printing deduplication', () => {
+  it('merges two printings of the same mainboard card into one entry', () => {
+    const text = '1 Wind-Scarred Crag (FDN) 271\n3 Wind-Scarred Crag (M21) 259';
+    const { mainboard } = parseMtgaText(text);
+    expect(mainboard).toHaveLength(1);
+    expect(mainboard[0]).toEqual({ quantity: 4, name: 'Wind-Scarred Crag' });
+  });
+
+  it('merges two printings of the same sideboard card into one entry', () => {
+    const text = '4 Lightning Bolt\n\n1 Smash to Smithereens (FDN) 1\n2 Smash to Smithereens (M21) 2';
+    const { sideboard } = parseMtgaText(text);
+    expect(sideboard).toHaveLength(1);
+    expect(sideboard[0]).toEqual({ quantity: 3, name: 'Smash to Smithereens' });
+  });
+
+  it('sums quantities correctly across more than two printings', () => {
+    const text = '2 Mountain (FDN) 279\n3 Mountain (M21) 100\n1 Mountain (ZNR) 280';
+    const { mainboard } = parseMtgaText(text);
+    expect(mainboard).toHaveLength(1);
+    expect(mainboard[0]).toEqual({ quantity: 6, name: 'Mountain' });
+  });
+});
+
+// ── parseMtgaText — (j) CRLF line endings ────────────────────────────────────
 
 describe('parseMtgaText — line endings', () => {
   it('handles Windows CRLF line endings', () => {
