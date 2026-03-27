@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import axios from 'axios'
-import { DeckProvider } from '../context/DeckContext.jsx'
+import { DeckProvider } from '../context/DeckContext'
 import { useDecks } from './useDecks'
 
 vi.mock('axios', () => ({

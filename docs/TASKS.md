@@ -327,7 +327,7 @@ Acceptance criteria:
 ---
 
 ### Task 3.4a — CardRow component
-**Status:** pending
+**Status:** complete
 **Depends on:** 3.2
 
 Produce:
@@ -355,7 +355,7 @@ Acceptance criteria:
 ---
 
 ### Task 3.4b — Deck editor page
-**Status:** pending
+**Status:** complete
 **Depends on:** 3.4a
 
 Produce:

@@ -8,7 +8,11 @@
       "Read(//c/Users/Admin/.cursor/**)",
       "Read(//c/Users/Admin/**)",
       "Bash(npm test:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(npm --workspace=client run build)",
+      "Bash(npm --workspace=client test -- --run)",
+      "Bash(npx vitest:*)"
     ]
   }
 }
