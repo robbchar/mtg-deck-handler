@@ -462,15 +462,22 @@ Acceptance criteria:
 **Human review before proceeding.**
 
 Test checklist:
-- [ ] Deck list loads and shows existing decks
-- [ ] Create new deck → lands in editor
-- [ ] Search for "Black Lotus" → results appear
-- [ ] Add card to mainboard → appears in editor
-- [ ] Edit quantity → change persists after refresh
-- [ ] Edit notes → change persists after refresh
-- [ ] Export deck → valid MTGA text in clipboard
-- [ ] Import MTGA text → creates deck correctly
-- [ ] Delete deck from list → deck gone
+- [x] Deck list loads and shows existing decks
+- [x] Create new deck → lands in editor
+- [x] Search for "Black Lotus" → results appear
+- [x] Add card to mainboard → appears in editor
+- [x] Edit quantity → change persists after refresh
+- [ ] Edit notes → change persists after refresh - 
+- [x] Export deck → valid MTGA text in clipboard
+- [x] Import MTGA text → creates deck correctly
+- [x] Delete deck from list → deck gone
+
+---
+
+### Task 3.6 — Bug fix
+**Status:** pending
+
+- Fix editing notes, time for auto save debounce is too short, should save also on navigation
 
 ---
 
