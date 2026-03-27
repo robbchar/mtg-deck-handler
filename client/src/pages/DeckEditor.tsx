@@ -44,8 +44,10 @@ function buildMtgaText(cards: CardEntry[], sideboard: CardEntry[]): string {
  *  - "Add Card" opens CardSearch slide-in panel
  *  - "Export" copies MTGA-format text to clipboard
  *  - "Import" opens ImportModal
- *  - All edits auto-save via updateDeck, debounced 1 second
+ *  - All edits auto-save via updateDeck, debounced 2 seconds
  *    (accumulated patch so rapid changes never lose data)
+ *  - Pending saves are flushed synchronously on unmount so navigating away
+ *    never discards unsaved changes
  */
 function DeckEditor() {
   const { id } = useParams<{ id: string }>()
@@ -75,6 +77,16 @@ function DeckEditor() {
   const pendingRef = useRef<DeckPatch>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  /**
+   * Keep a stable ref to `updateDeck` so the unmount cleanup can call the
+   * latest version without needing it as a dep (which would cause the effect
+   * to re-register and clear `pendingRef` on every render).
+   */
+  const updateDeckRef = useRef(updateDeck)
+  useEffect(() => {
+    updateDeckRef.current = updateDeck
+  })
+
   const scheduleAutoSave = useCallback(
     (patch: DeckPatch) => {
       pendingRef.current = { ...pendingRef.current, ...patch }
@@ -83,15 +95,27 @@ function DeckEditor() {
         const snapshot = { ...pendingRef.current }
         pendingRef.current = {}
         updateDeck(id!, snapshot)
-      }, 1000)
+      }, 2000)
     },
     [id, updateDeck],
   )
 
-  // Clean up the timer when the component unmounts.
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-  }, [])
+  // On unmount (navigation), flush any pending debounced save immediately so
+  // no changes are silently discarded when the user navigates away.
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      const snapshot = { ...pendingRef.current }
+      if (Object.keys(snapshot).length > 0 && id) {
+        pendingRef.current = {}
+        updateDeckRef.current(id, snapshot)
+      }
+    },
+    // `id` is the only reactive value that should trigger re-registration.
+    // `updateDeckRef` is a ref — intentionally not listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [id],
+  )
 
   // ── Load deck on mount ────────────────────────────────────────────────────
   useEffect(() => {
