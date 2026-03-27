@@ -6,10 +6,8 @@ import CardRow from '../components/CardRow'
 import CardSearch from '../components/CardSearch'
 import ImportModal from '../components/ImportModal'
 import Spinner from '../components/Spinner'
+import FormatSelect from '../components/FormatSelect'
 import type { CardEntry, ScryfallCard } from '../types'
-
-/** Ordered list of supported format values for the dropdown. */
-const FORMATS = ['standard', 'pioneer', 'modern', 'legacy', 'vintage', 'commander', 'draft']
 
 type LoadState = 'loading' | 'ready' | 'error'
 type ExportStatus = 'idle' | 'copied' | 'error'
@@ -346,20 +344,13 @@ function DeckEditor() {
             <label htmlFor="deck-format" className="mr-2 text-sm font-medium text-gray-600">
               Format:
             </label>
-            <select
+            <FormatSelect
               id="deck-format"
               value={format}
               onChange={handleFormatChange}
               className="rounded-lg border border-gray-300 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               data-testid="deck-format-select"
-            >
-              <option value="">— none —</option>
-              {FORMATS.map((f) => (
-                <option key={f} value={f}>
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         </div>
 

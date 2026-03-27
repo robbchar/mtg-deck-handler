@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
-
-const FORMATS = ['standard', 'pioneer', 'modern', 'legacy', 'vintage', 'commander', 'draft']
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { parseMtgaText } from '../utils/mtgaFormat'
 import CloseButton from './CloseButton'
+import FormatSelect from './FormatSelect'
 import ImportPreview from './ImportPreview'
 import type { ParsedDeck } from '../types'
 
@@ -167,20 +166,13 @@ function ImportModal({ isOpen, onClose }: ImportModalProps) {
               Format{' '}
               <span className="font-normal text-gray-400">(optional)</span>
             </label>
-            <select
+            <FormatSelect
               id="import-format"
               value={format}
               onChange={(e) => setFormat(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               data-testid="import-format"
-            >
-              <option value="">— none —</option>
-              {FORMATS.map((f) => (
-                <option key={f} value={f}>
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* MTGA textarea */}
