@@ -1,91 +1,111 @@
+import { useState } from 'react'
 import type { ScryfallCard } from '../types'
+import CardImagePlaceholder from './CardImagePlaceholder'
 
-function getCardImage(card: ScryfallCard): string | null {
+interface CardResultItemProps {
+  card: ScryfallCard
+  sectionNames: string[]
+  onAddToSection: (card: ScryfallCard, sectionId: string) => void
+}
+
+function getSmallImage(card: ScryfallCard): string | null {
   if (card?.image_uris?.small) return card.image_uris.small
   if (card?.card_faces?.[0]?.image_uris?.small) return card.card_faces[0].image_uris!.small
   return null
 }
 
-interface CardResultItemProps {
-  card: ScryfallCard
-  isSelected: boolean
-  onSelect: (card: ScryfallCard) => void
-  onSectionSelect: (section: 'mainboard' | 'sideboard') => void
+function getNormalImage(card: ScryfallCard): string | null {
+  if (card?.image_uris?.normal) return card.image_uris.normal
+  if (card?.card_faces?.[0]?.image_uris?.normal) return card.card_faces[0].image_uris!.normal
+  return null
 }
 
-/**
- * A single search result row: card thumbnail, name/mana/type, and an inline
- * mainboard/sideboard picker that appears when the row is selected.
- */
-function CardResultItem({ card, isSelected, onSelect, onSectionSelect }: CardResultItemProps) {
-  const imgSrc = getCardImage(card)
+export default function CardResultItem({ card, sectionNames, onAddToSection }: CardResultItemProps) {
+  const [thumbError, setThumbError] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+
+  const smallSrc = getSmallImage(card)
+  const normalSrc = getNormalImage(card)
+  const showThumb = Boolean(smallSrc) && !thumbError
 
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect(card)}
-        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-          isSelected
-            ? 'border-indigo-300 bg-indigo-50'
-            : 'border-gray-100 bg-gray-50 hover:border-indigo-200 hover:bg-indigo-50'
-        }`}
-        aria-label={`Add ${card.name} to deck`}
-        aria-expanded={isSelected}
-      >
-        {imgSrc ? (
+    <li className="flex flex-col gap-2 rounded-md border border-slate-700 bg-slate-800 p-2">
+      <div className="flex items-center gap-3">
+        {/* Thumbnail */}
+        {showThumb ? (
           <img
-            src={imgSrc}
+            src={smallSrc!}
             alt={card.name}
-            className="h-14 w-10 shrink-0 rounded object-cover"
             loading="lazy"
+            onError={() => setThumbError(true)}
+            className="h-14 w-10 shrink-0 rounded object-cover"
           />
         ) : (
-          <div
-            className="flex h-14 w-10 shrink-0 items-center justify-center rounded bg-gray-200"
-            aria-hidden="true"
-          >
-            <span className="text-xs text-gray-400">?</span>
-          </div>
+          <CardImagePlaceholder className="h-14 w-10 shrink-0" />
         )}
 
+        {/* Card info */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-900">{card.name}</p>
+          <p className="truncate font-semibold text-slate-100">{card.name}</p>
+          <p className="truncate text-xs text-slate-400">{card.type_line}</p>
           {card.mana_cost && (
-            <p className="text-xs text-gray-500" data-testid={`mana-cost-${card.id}`}>
-              {card.mana_cost}
-            </p>
-          )}
-          {card.type_line && (
-            <p className="truncate text-xs text-gray-400">{card.type_line}</p>
+            <p className="truncate text-xs text-slate-500">{card.mana_cost}</p>
           )}
         </div>
-      </button>
 
-      {isSelected && (
-        <div
-          className="mt-1 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3"
-          data-testid="section-picker"
+        {/* Add button */}
+        <button
+          type="button"
+          onClick={() => setPickerOpen((prev) => !prev)}
+          className="shrink-0 rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          aria-expanded={pickerOpen}
+          aria-label={`Add ${card.name} to deck`}
         >
-          <p className="mr-auto text-xs font-medium text-indigo-800">Add to:</p>
-          <button
-            type="button"
-            onClick={() => onSectionSelect('mainboard')}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            Mainboard
-          </button>
-          <button
-            type="button"
-            onClick={() => onSectionSelect('sideboard')}
-            className="rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          >
-            Sideboard
-          </button>
+          {pickerOpen ? 'Cancel' : 'Add'}
+        </button>
+      </div>
+
+      {/* Section picker */}
+      {pickerOpen && (
+        <div
+          data-testid="section-picker"
+          className="flex gap-3 rounded-md bg-slate-900 p-2"
+        >
+          {/* Normal-size preview */}
+          {normalSrc ? (
+            <img
+              src={normalSrc}
+              alt={card.name}
+              loading="lazy"
+              className="h-24 w-[68px] shrink-0 rounded object-cover"
+            />
+          ) : (
+            <CardImagePlaceholder className="h-24 w-[68px] shrink-0" />
+          )}
+
+          {/* Section buttons */}
+          <div className="flex flex-col gap-1">
+            <p className="mb-1 text-xs font-semibold text-slate-300">Add to section:</p>
+            {sectionNames.length === 0 ? (
+              <p className="text-xs text-slate-500">No sections available.</p>
+            ) : (
+              sectionNames.map((name, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    onAddToSection(card, name)
+                    setPickerOpen(false)
+                  }}
+                  className="rounded bg-slate-700 px-2 py-1 text-left text-xs text-slate-200 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  {name}
+                </button>
+              ))
+            )}
+          </div>
         </div>
       )}
     </li>
   )
 }
-
-export default CardResultItem

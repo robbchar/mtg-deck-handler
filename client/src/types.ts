@@ -43,8 +43,8 @@ export interface ScryfallCard {
   name: string
   mana_cost: string
   type_line: string
-  image_uris?: { small: string }
-  card_faces?: Array<{ image_uris?: { small: string } }>
+  image_uris?: { small: string; normal?: string }
+  card_faces?: Array<{ image_uris?: { small: string; normal?: string } }>
 }
 
 /** Return shape of parseMtgaText (client-side MTGA parser) */

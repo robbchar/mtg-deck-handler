@@ -14,6 +14,7 @@ const {
   updateDeck,
   deleteDeck,
 } = require('../services/deckService');
+const { validateDeckName } = require('../middleware/validate');
 
 const router = Router();
 
@@ -53,15 +54,9 @@ router.get('/:id', (req, res) => {
  * POST /api/decks
  * Creates a new deck. Requires `name` in the request body.
  */
-router.post('/', (req, res) => {
+router.post('/', validateDeckName, (req, res) => {
   try {
-    const { name } = req.body || {};
-
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      return res.status(400).json({ error: 'name is required' });
-    }
-
-    const deck = createDeck({ ...req.body, name: name.trim() });
+    const deck = createDeck({ ...req.body, name: req.body.name.trim() });
     res.status(201).json(deck);
   } catch (err) {
     console.error('POST /api/decks error:', err);
@@ -76,7 +71,7 @@ router.post('/', (req, res) => {
  * GET /api/decks (which calls listDecks()) reads the updated file and
  * reflects the new notes/name/format in the list response.
  */
-router.put('/:id', (req, res) => {
+router.put('/:id', validateDeckName, (req, res) => {
   try {
     const deck = updateDeck(req.params.id, req.body || {});
     res.json(deck);

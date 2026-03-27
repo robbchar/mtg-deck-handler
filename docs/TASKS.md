@@ -485,15 +485,19 @@ Test checklist:
 > Goal: App is robust. Edge cases handled. Ready for real use.
 
 ### Task 4.1 — Error boundaries and API error handling
-**Status:** pending
+**Status:** complete
 
-- React error boundary around DeckEditor and DeckList
-- Toast notifications for API errors (use a simple custom hook, no library needed)
-- Server: all unhandled errors return `{ error: message }` JSON, never HTML
-- Server: request validation middleware for all POST/PUT routes
+Produced:
+- `client/src/components/ErrorBoundary.tsx` — class component error boundary wrapping DeckList and DeckEditor in App.tsx
+- `client/src/hooks/useToast.ts` — custom hook (no external library) managing a toast queue with auto-dismiss (4 s) and manual dismiss
+- `client/src/components/ToastContainer.tsx` — renders the active toast stack in the bottom-right corner
+- `client/src/context/ToastContext.tsx` — provides `addToast` to all descendants via `useToastContext()`
+- `server/middleware/validate.js` — `validateDeckName` and `validateImport` middleware; wired into POST/PUT deck routes and POST /api/import
+
+Server global error handler (already in `server/index.js`) returns `{ error: message }` JSON for all unhandled errors; never returns HTML.
 
 ### Task 4.2 — Billing error handling in claude_client.py (swarm project)
-**Status:** pending
+**Status:** complete
 
 In `claude_client.py`, catch `anthropic.APIStatusError` specifically.
 If status code is 402 or error message contains "credit balance",
@@ -501,19 +505,22 @@ raise a clean `BillingError` with a message telling the user to top up at
 console.anthropic.com. All other API errors re-raise as-is.
 
 ### Task 4.3 — Loading and empty states audit
-**Status:** pending
+**Status:** complete
 
-Walk every page and component. Every async operation must have:
-- Loading spinner or skeleton
-- Empty state with helpful copy (not blank)
-- Error state with retry option where applicable
+All pages and components audited. Every async operation has loading, empty, and error states:
+- DeckList: loading spinner, empty-state illustration, error banner with **Retry** button
+- DeckEditor: loading spinner, error state with back link
+- CardSearch: loading spinner (`search-loading`), error alert with **Retry** button, "No cards found" empty state (`no-results`), empty mainboard and sideboard messages in DeckEditor
 
 ### Task 4.4 — Scryfall image handling
-**Status:** pending
+**Status:** complete
 
-Cards without images (some older cards) should show a placeholder.
-Large card images load lazily (use `loading="lazy"` on img tags).
-Card images in search results use `small` image URI, card detail uses `normal`.
+Produced:
+- `client/src/components/CardImagePlaceholder.tsx` — styled MTG card-back SVG placeholder (diamond + oval motif on dark gradient)
+- `client/src/components/CardImagePlaceholder.test.tsx` — full test coverage
+- `client/src/components/CardResultItem.tsx` — rewritten with `sectionNames`/`onAddToSection` API; uses `small` URI for thumbnail (lazy-loaded), `normal` URI in section-picker preview; falls back to `CardImagePlaceholder` when image is absent or `onError` fires; supports DFC via `card_faces[0].image_uris`
+- `client/src/components/CardSearch.tsx` — updated to use `sectionNames`/`onAddToSection` and pass them to `CardResultItem`; uses native `fetch` (enabling test isolation via `global.fetch` mock)
+- `client/src/types.ts` — `ScryfallCard.image_uris` and `card_faces[].image_uris` now include `normal?: string`
 
 ### ✅ MILESTONE 4 CHECKPOINT — SHIP IT
 **Final human review.**

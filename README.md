@@ -17,7 +17,8 @@ mtg-deck-manager/
 │   │   ├── cardService.js   # Scryfall cache-first lookup + search
 │   │   └── mtgaService.js   # MTGA text import/export format conversion
 │   ├── middleware/  # Shared middleware
-│   │   └── rateLimiter.js   # Async FIFO queue for Scryfall rate limiting
+│   │   ├── rateLimiter.js   # Async FIFO queue for Scryfall rate limiting
+│   │   └── validate.js      # Request validation middleware for POST/PUT routes
 │   ├── index.js     # App entry point
 │   └── .env.example # Environment variable template
 ├── data/            # Runtime data — gitignored, auto-created on startup
@@ -104,6 +105,44 @@ library. API calls go through axios, proxied by Vite to the Express backend.
 
 ### Key Components
 
+#### `ErrorBoundary`
+
+Located at `client/src/components/ErrorBoundary.tsx`.
+
+Wraps each page in `App.tsx`. Catches uncaught JavaScript errors in the child
+component tree and renders a fallback UI with a "Try again" button and a "Back
+to decks" link instead of crashing the entire page.
+
+#### `ToastContainer` + `useToast`
+
+Located at `client/src/components/ToastContainer.tsx` and
+`client/src/hooks/useToast.ts`.
+
+Lightweight in-app notification system with no external dependencies. API errors
+surface as toast notifications in the bottom-right corner. Toasts auto-dismiss
+after 4 seconds and are also manually dismissible via the × button.
+
+Usage: consume `addToast` via `useToastContext()` from `context/ToastContext` in
+any component wrapped by `ToastProvider`.
+
+#### `CardImagePlaceholder`
+
+Located at `client/src/components/CardImagePlaceholder.tsx`.
+
+Rendered in place of a broken or missing card image. Displays a styled MTG
+card-back motif (diamond + oval SVG) on a dark gradient background. Used by
+`CardResultItem` for both the thumbnail position and the section-picker preview.
+
+#### `CardResultItem`
+
+Located at `client/src/components/CardResultItem.tsx`.
+
+Renders a single search result with:
+- **Thumbnail** using the Scryfall `small` image URI (with `loading="lazy"`)
+- **Fallback** to `CardImagePlaceholder` when image is missing or fails to load
+- **DFC support** — falls back to `card_faces[0].image_uris` for double-faced cards
+- **Section picker** — inline picker showing `normal`-size preview and section buttons
+
 #### `ImportModal`
 
 Located at `client/src/components/ImportModal.jsx`.
@@ -140,10 +179,12 @@ card count summary and any unparseable lines (amber warning list).
 
 #### `CardSearch`
 
-Located at `client/src/components/CardSearch.jsx`.
+Located at `client/src/components/CardSearch.tsx`.
 
-Slide-in panel for searching and adding cards to a deck. Search is debounced
-at 300 ms. Clicking a result opens an inline mainboard/sideboard picker.
+Slide-in panel for searching and adding cards to a deck. Search fires on form
+submit and is debounced at 300 ms on input change. Displays results using
+`CardResultItem`. Errors surface with a Retry button. Accepts `sectionNames`
+so the inline section picker is not hardcoded to mainboard/sideboard.
 
 ### Client-Side Utilities
 
@@ -193,6 +234,16 @@ custom-delay instance — no live API required.
 - Promises resolve in the exact order they were enqueued (FIFO).
 - Errors thrown or rejected by an enqueued function reject only that promise;
   the queue continues draining normally.
+
+## Validation Middleware (`server/middleware/validate.js`)
+
+Request validation middleware applied to all POST and PUT routes. Returns HTTP
+400 with a JSON error message when required fields are missing or invalid.
+
+| Middleware | Applied to | Validates |
+|---|---|---|
+| `validateDeckName` | `POST /api/decks`, `PUT /api/decks/:id` | `name` required on POST; must be non-empty string if provided on PUT |
+| `validateImport` | `POST /api/import` | `text` and `name` required, both non-empty strings |
 
 ## Card Service (`server/services/cardService.js`)
 
@@ -314,7 +365,7 @@ curl -X POST http://localhost:3001/api/decks \
   -H 'Content-Type: application/json' \
   -d '{ "name": "Mono Red Burn", "format": "Standard" }'
 # 201 → created deck object
-# 400 → { "error": "name is required" }
+# 400 → { "error": "name is required and must be a non-empty string" }
 ```
 
 #### `PUT /api/decks/:id`
@@ -383,8 +434,8 @@ curl -X POST http://localhost:3001/api/import \
     "format": "Standard"
   }'
 # 201 → created deck object (includes unknown[] array)
-# 400 → { "error": "text is required" }
-# 400 → { "error": "name is required" }
+# 400 → { "error": "text is required and must be a non-empty string" }
+# 400 → { "error": "name is required and must be a non-empty string" }
 ```
 
 #### `POST /api/decks/:id/export`

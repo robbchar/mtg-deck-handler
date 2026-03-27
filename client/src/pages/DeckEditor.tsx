@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axios from 'axios'
 import { useDecks } from '../hooks/useDecks'
+import { useToastContext } from '../context/ToastContext'
 import CardRow from '../components/CardRow'
 import CardSearch from '../components/CardSearch'
 import ImportModal from '../components/ImportModal'
@@ -52,6 +53,7 @@ function buildMtgaText(cards: CardEntry[], sideboard: CardEntry[]): string {
 function DeckEditor() {
   const { id } = useParams<{ id: string }>()
   const { getDeck, updateDeck } = useDecks()
+  const { addToast } = useToastContext()
 
   // ── Loading state ─────────────────────────────────────────────────────────
   const [loadState, setLoadState] = useState<LoadState>('loading')
@@ -219,7 +221,7 @@ function DeckEditor() {
   // Bug fix: copy mana_cost and type_line from the Scryfall result so CardRow
   // can render them immediately and they persist to the server.
 
-  function handleAddCard(card: ScryfallCard, section: 'mainboard' | 'sideboard') {
+  function handleAddCard(card: ScryfallCard, section: string) {
     if (section === 'mainboard') {
       const existing = mainboard.find((c) => c.name === card.name)
       const updated: CardEntry[] = existing
@@ -279,6 +281,7 @@ function DeckEditor() {
       } catch {
         setExportStatus('error')
         setTimeout(() => setExportStatus('idle'), 2000)
+        addToast('Failed to copy deck to clipboard.')
       }
     }
   }
@@ -493,7 +496,8 @@ function DeckEditor() {
       <CardSearch
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        onAddCard={handleAddCard}
+        sectionNames={['mainboard', 'sideboard']}
+        onAddToSection={handleAddCard}
       />
 
       {/* ── ImportModal ── */}
