@@ -1,0 +1,27 @@
+name: Test Client
+
+on:
+  push:
+    paths:
+      - 'client/**'
+  pull_request:
+    paths:
+      - 'client/**'
+
+jobs:
+  test:
+    name: Client Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run client tests
+        run: npm run test:client
