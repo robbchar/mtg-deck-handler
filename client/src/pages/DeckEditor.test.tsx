@@ -229,14 +229,14 @@ describe('DeckEditor — inline name editing', () => {
     await waitFor(() => expect(screen.getByTestId('deck-name-heading')).toBeInTheDocument())
     expect(screen.getByTestId('deck-name-heading')).toHaveTextContent('New Name')
 
-    // Auto-save fires after debounce
+    // Auto-save fires after debounce (2 s — allow extra buffer)
     await waitFor(
       () =>
         expect(updateDeck).toHaveBeenCalledWith(
           'test-deck-id',
           expect.objectContaining({ name: 'New Name' }),
         ),
-      { timeout: 2000 },
+      { timeout: 3500 },
     )
   })
 
@@ -302,7 +302,7 @@ describe('DeckEditor — format selector', () => {
           'test-deck-id',
           expect.objectContaining({ format: 'modern' }),
         ),
-      { timeout: 2000 },
+      { timeout: 3500 },
     )
   })
 })
@@ -335,7 +335,7 @@ describe('DeckEditor — notes', () => {
           'test-deck-id',
           expect.objectContaining({ notes: 'Updated strategy.' }),
         ),
-      { timeout: 2000 },
+      { timeout: 3500 },
     )
   })
 })
@@ -359,7 +359,7 @@ describe('DeckEditor — quantity controls via CardRow', () => {
           'test-deck-id',
           expect.objectContaining({ cards: expect.any(Array) }),
         ),
-      { timeout: 2000 },
+      { timeout: 3500 },
     )
   })
 
@@ -497,9 +497,9 @@ describe('DeckEditor — auto-save', () => {
     })
     fireEvent.blur(screen.getByTestId('notes-textarea'))
 
-    // Flush debounce timer (debounce is 1000ms)
+    // Flush debounce timer (debounce is 2000ms)
     await act(async () => {
-      vi.advanceTimersByTime(1100)
+      vi.advanceTimersByTime(2100)
     })
 
     expect(updateDeck).toHaveBeenCalledTimes(1)
@@ -507,6 +507,60 @@ describe('DeckEditor — auto-save', () => {
       'test-deck-id',
       expect.objectContaining({ format: 'legacy', notes: 'New notes' }),
     )
+
+    vi.useRealTimers()
+  })
+
+  it('flushes pending saves immediately when the component unmounts (navigation)', async () => {
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+
+    const { unmount } = renderEditor()
+    // Wait for the deck to finish loading
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    // Take over the clock so the debounce timer never fires on its own
+    vi.useFakeTimers()
+
+    // Edit notes and blur — this schedules a pending save but the timer is frozen
+    fireEvent.change(screen.getByTestId('notes-textarea'), {
+      target: { value: 'Notes before navigation.' },
+    })
+    fireEvent.blur(screen.getByTestId('notes-textarea'))
+
+    // Confirm the debounce hasn't fired yet
+    expect(updateDeck).not.toHaveBeenCalled()
+
+    // Simulate navigation: unmount the component
+    act(() => {
+      unmount()
+    })
+
+    // The cleanup effect must flush the pending save synchronously
+    expect(updateDeck).toHaveBeenCalledTimes(1)
+    expect(updateDeck).toHaveBeenCalledWith(
+      'test-deck-id',
+      expect.objectContaining({ notes: 'Notes before navigation.' }),
+    )
+
+    vi.useRealTimers()
+  })
+
+  it('does not call updateDeck on unmount when there are no pending changes', async () => {
+    const updateDeck = vi.fn().mockResolvedValue(DECK)
+    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+
+    const { unmount } = renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Unmount without making any changes
+    act(() => {
+      unmount()
+    })
+
+    expect(updateDeck).not.toHaveBeenCalled()
 
     vi.useRealTimers()
   })

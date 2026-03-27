@@ -475,7 +475,7 @@ Test checklist:
 ---
 
 ### Task 3.6 — Bug fix
-**Status:** pending
+**Status:** complete
 
 - Fix editing notes, time for auto save debounce is too short, should save also on navigation
 

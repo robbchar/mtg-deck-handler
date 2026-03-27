@@ -435,3 +435,23 @@ will be empty once all cards are resolved (Task 2.2+).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full technical spec,
 data models, caching strategy, and planned frontend structure.
+
+## Bug Fixes
+
+### Notes auto-save: data loss on navigation (Task 3.6)
+
+**Problem:** The notes auto-save debounce timer was set to 1 second, which was
+short enough that the `updateDeck` API could be called while the user was still
+actively typing. More critically, when the user navigated away from the
+`DeckEditor` page, the React cleanup effect only called `clearTimeout` —
+discarding the pending save without ever calling `updateDeck`. Any notes edits
+made within the debounce window before navigation were silently lost.
+
+**Fix:**
+1. **Debounce increased to 2 seconds** — reduces unnecessary API calls during
+   active typing.
+2. **Flush on unmount** — the cleanup `useEffect` now checks `pendingRef` and
+   calls `updateDeck` synchronously before the component is torn down, ensuring
+   no in-flight changes are ever discarded on navigation. A `updateDeckRef` is
+   kept in sync via a layout-free effect so the cleanup always has access to the
+   latest `updateDeck` function without creating stale closures.
