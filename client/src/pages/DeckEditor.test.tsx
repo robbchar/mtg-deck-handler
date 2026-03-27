@@ -479,15 +479,14 @@ describe('DeckEditor — Import button', () => {
 
 describe('DeckEditor — auto-save', () => {
   it('accumulates multiple field changes into a single debounced updateDeck call', async () => {
-    vi.useFakeTimers()
     const updateDeck = vi.fn().mockResolvedValue(DECK)
     useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
 
     renderEditor()
-    await act(async () => {
-      vi.runAllTimers() // flush the getDeck resolution (it's mocked)
-    })
+    // Wait for the deck to load before taking over the clock
     await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
 
     // Trigger two changes quickly — they should be batched
     fireEvent.change(screen.getByTestId('deck-format-select'), {
@@ -498,7 +497,7 @@ describe('DeckEditor — auto-save', () => {
     })
     fireEvent.blur(screen.getByTestId('notes-textarea'))
 
-    // Flush debounce timer
+    // Flush debounce timer (debounce is 1000ms)
     await act(async () => {
       vi.advanceTimersByTime(1100)
     })

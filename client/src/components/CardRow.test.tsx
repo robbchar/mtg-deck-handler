@@ -2,7 +2,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import CardRow from './CardRow'
 
-const CARD = { name: 'Lightning Bolt', manaCost: '{R}', typeLine: 'Instant' }
+const CARD = { name: 'Lightning Bolt', mana_cost: '{R}', type_line: 'Instant' }
 const CARD_NO_META = { name: 'Ancient Card' }
 
 function renderRow(props = {}) {

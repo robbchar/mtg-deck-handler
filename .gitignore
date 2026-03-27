@@ -16,7 +16,7 @@ node_modules/
 client/dist/
 client/.vite/
 
-# OS / editor artefacts
+# OS / editor artifacts
 .DS_Store
 Thumbs.db
 .idea/
@@ -24,3 +24,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 *.stackdump
+
+# Claude
+.claude/
