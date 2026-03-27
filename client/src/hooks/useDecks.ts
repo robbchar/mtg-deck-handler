@@ -181,18 +181,13 @@ export function useDecks() {
   // ── getDeck ───────────────────────────────────────────────────────────────
 
   /**
-   * Returns a single deck by id. Serves from the local cache when available;
-   * otherwise fetches GET /api/decks/:id from the server.
+   * Fetches a single full deck by id from GET /api/decks/:id.
    *
-   * Note: The cache stores DeckMetadata (no cards/sideboard arrays). Callers
-   * that need card data should handle missing arrays defensively (`?? []`).
-   * A direct fetch is performed when the deck is not in the list cache.
+   * Always hits the API — the list cache holds DeckMetadata which has no
+   * cards/sideboard arrays, so it cannot be used as a Deck substitute.
    */
   const getDeck = useCallback(
     async (id: string): Promise<Deck | null> => {
-      const cached = decks.find((d) => d.id === id)
-      if (cached) return cached as unknown as Deck
-
       try {
         const { data } = await axios.get<Deck>(`/api/decks/${id}`)
         return data
@@ -204,7 +199,7 @@ export function useDecks() {
         return null
       }
     },
-    [decks, dispatch]
+    [dispatch]
   )
 
   return { decks, loading, error, createDeck, updateDeck, deleteDeck, getDeck }

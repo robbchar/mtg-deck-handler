@@ -474,8 +474,9 @@ describe('useDecks — deleteDeck', () => {
 // ── getDeck ───────────────────────────────────────────────────────────────────
 
 describe('useDecks — getDeck', () => {
-  it('returns a deck from local state without an API call when cached', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
+  it('always fetches from the API even when the deck is in list cache', async () => {
+    axios.get.mockResolvedValueOnce({ data: [DECK_A] }) // mount
+    axios.get.mockResolvedValueOnce({ data: DECK_A })   // getDeck fetch
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
 
@@ -485,8 +486,9 @@ describe('useDecks — getDeck', () => {
     })
 
     expect(deck).toEqual(DECK_A)
-    // Only the initial mount GET — no second call
-    expect(axios.get).toHaveBeenCalledTimes(1)
+    // Mount GET + getDeck GET
+    expect(axios.get).toHaveBeenCalledTimes(2)
+    expect(axios.get).toHaveBeenCalledWith('/api/decks/deck-aaa')
   })
 
   it('fetches from the API when the deck is not in local state', async () => {
