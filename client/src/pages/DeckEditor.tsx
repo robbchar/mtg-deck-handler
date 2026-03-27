@@ -421,7 +421,7 @@ function DeckEditor() {
           <div className="space-y-1">
             {mainboard.map((card) => (
               <CardRow
-                key={card.name}
+                key={card.scryfall_id ?? card.name}
                 card={card}
                 quantity={card.quantity}
                 onQuantityChange={(qty) => handleMainQuantityChange(card.name, qty)}
@@ -449,7 +449,7 @@ function DeckEditor() {
           <div className="space-y-1">
             {sideboard.map((card) => (
               <CardRow
-                key={card.name}
+                key={card.scryfall_id ?? card.name}
                 card={card}
                 quantity={card.quantity}
                 onQuantityChange={(qty) => handleSideQuantityChange(card.name, qty)}

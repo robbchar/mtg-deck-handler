@@ -69,13 +69,21 @@ export function parseMtgaText(text: string | null | undefined): ParsedDeck {
     if (quantity <= 0) continue
 
     const name = match[2].trim().replace(MTGA_SUFFIX_RE, '').trim()
-    const card = { quantity, name }
-
     if (inSideboard) {
-      sideboard.push(card)
+      const existing = sideboard.find((c) => c.name === name)
+      if (existing) {
+        existing.quantity += quantity
+      } else {
+        sideboard.push({ quantity, name })
+      }
     } else {
-      mainboard.push(card)
-      hasMainboardCards = true
+      const existing = mainboard.find((c) => c.name === name)
+      if (existing) {
+        existing.quantity += quantity
+      } else {
+        mainboard.push({ quantity, name })
+        hasMainboardCards = true
+      }
     }
   }
 
