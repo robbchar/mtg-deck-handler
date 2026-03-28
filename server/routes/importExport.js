@@ -11,6 +11,7 @@
 const { Router } = require('express');
 const { getDeck, createDeck } = require('../services/deckService');
 const { exportDeck, parseMtgaText } = require('../services/mtgaService');
+const { validateImport } = require('../middleware/validate');
 
 const router = Router();
 
@@ -60,17 +61,9 @@ router.post('/decks/:id/export', (req, res) => {
  * @returns {400} { error: string }
  * @returns {500} { error: string }
  */
-router.post('/import', (req, res) => {
+router.post('/import', validateImport, (req, res) => {
   try {
     const { text, name, format } = req.body || {};
-
-    if (!text || typeof text !== 'string' || text.trim() === '') {
-      return res.status(400).json({ error: 'text is required' });
-    }
-
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      return res.status(400).json({ error: 'name is required' });
-    }
 
     // parseMtgaText handles: CRLF/LF, "Deck"/"Sideboard" headers,
     // set/collector suffixes, comment lines, and invalid quantities.

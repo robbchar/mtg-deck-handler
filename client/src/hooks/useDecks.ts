@@ -43,12 +43,25 @@ export function useDecks() {
   const { state, dispatch } = context
   const { decks, loading, error } = state
 
-  // ── Fetch deck list on mount ──────────────────────────────────────────────
+  // ── Fetch deck list ────────────────────────────────────────────────────────
 
+  const fetchDecks = useCallback(async () => {
+    dispatch({ type: 'FETCH_START' })
+    try {
+      const { data } = await axios.get<DeckMetadata[]>('/api/decks')
+      dispatch({ type: 'FETCH_SUCCESS', payload: data })
+    } catch (err) {
+      dispatch({
+        type: 'FETCH_ERROR',
+        payload: getErrorMessage(err, 'Failed to load decks'),
+      })
+    }
+  }, [dispatch])
+
+  // Fetch on mount.
   useEffect(() => {
     let cancelled = false
-
-    async function fetchDecks() {
+    const wrappedFetch = async () => {
       dispatch({ type: 'FETCH_START' })
       try {
         const { data } = await axios.get<DeckMetadata[]>('/api/decks')
@@ -62,12 +75,14 @@ export function useDecks() {
         }
       }
     }
-
-    fetchDecks()
+    wrappedFetch()
     return () => {
       cancelled = true
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Re-fetch the deck list (e.g. after a network error). */
+  const refetch = useCallback(() => fetchDecks(), [fetchDecks])
 
   // ── createDeck ────────────────────────────────────────────────────────────
 
@@ -202,5 +217,5 @@ export function useDecks() {
     [dispatch]
   )
 
-  return { decks, loading, error, createDeck, updateDeck, deleteDeck, getDeck }
+  return { decks, loading, error, createDeck, updateDeck, deleteDeck, getDeck, refetch }
 }

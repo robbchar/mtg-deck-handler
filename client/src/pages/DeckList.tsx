@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDecks } from '../hooks/useDecks'
+import { useToastContext } from '../context/ToastContext'
 import DeckCard from '../components/DeckCard'
 import ImportModal from '../components/ImportModal'
 
@@ -17,8 +18,14 @@ import ImportModal from '../components/ImportModal'
  */
 function DeckList() {
   const navigate = useNavigate()
-  const { decks, loading, error, createDeck, deleteDeck } = useDecks()
+  const { decks, loading, error, createDeck, deleteDeck, refetch } = useDecks()
+  const { addToast } = useToastContext()
   const [importModalOpen, setImportModalOpen] = useState(false)
+
+  // Surface API errors as toasts in addition to the inline banner.
+  useEffect(() => {
+    if (error) addToast(error)
+  }, [error]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Creates a new deck with a default name and immediately opens the editor.
@@ -67,9 +74,18 @@ function DeckList() {
       {error && (
         <div
           role="alert"
-          className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+          className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
         >
-          {error}
+          <span>{error}</span>
+          {refetch && (
+            <button
+              type="button"
+              onClick={refetch}
+              className="shrink-0 rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
