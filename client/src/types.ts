@@ -11,6 +11,8 @@ export interface CardEntry {
   section: 'mainboard' | 'sideboard'
   mana_cost?: string
   type_line?: string
+  /** Stored when added via CardSearch so grid/compact views can show images without re-fetching. */
+  image_uris?: { small: string; normal?: string }
 }
 
 /** Full deck object returned by GET /api/decks/:id */
@@ -43,8 +45,13 @@ export interface ScryfallCard {
   name: string
   mana_cost: string
   type_line: string
+  oracle_text?: string
   image_uris?: { small: string; normal?: string }
-  card_faces?: Array<{ image_uris?: { small: string; normal?: string } }>
+  card_faces?: Array<{
+    name?: string
+    oracle_text?: string
+    image_uris?: { small: string; normal?: string }
+  }>
 }
 
 /** Return shape of parseMtgaText (client-side MTGA parser) */
