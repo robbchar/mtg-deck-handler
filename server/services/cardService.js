@@ -177,4 +177,51 @@ async function searchCards(query) {
   return cards;
 }
 
-module.exports = { getCard, searchCards, getCacheAge };
+/**
+ * Returns a Scryfall card object by set code and collector number using a
+ * cache-first strategy.
+ *
+ * Uses Scryfall's `/cards/:set/:collector_number` endpoint — the only reliable
+ * way to fetch the exact printing exported by MTGA (e.g. "Mountain (ANB) 114").
+ * After fetching, the card is cached both by its UUID (for getCard() hits) and
+ * by a set+collector key so repeat imports don't re-hit the network.
+ *
+ * @param {string} setCode         - Three-to-five character set code (e.g. "ANB")
+ * @param {string} collectorNumber - Collector number as a string (e.g. "114", "279a")
+ * @returns {Promise<object|null>} Scryfall card object, or `null` if not found.
+ */
+async function getCardBySetCollector(setCode, collectorNumber) {
+  const cacheKey = `set_${setCode.toLowerCase()}_${collectorNumber}`;
+  const cacheFile = path.join(CACHE_DIR, `${cacheKey}.json`);
+
+  const age = fs.existsSync(cacheFile)
+    ? Math.max(0, Date.now() - fs.statSync(cacheFile).mtimeMs)
+    : null;
+
+  if (age !== null && age < CACHE_TTL_MS) {
+    return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  }
+
+  const card = await scryfallLimiter.enqueue(async () => {
+    const response = await fetch(
+      `${SCRYFALL_BASE}/cards/${setCode.toLowerCase()}/${collectorNumber}`,
+    );
+
+    if (response.status === 404) return null;
+    if (response.status === 429) throw makeRateLimitError();
+    if (!response.ok) throw new Error(`Scryfall API error: HTTP ${response.status}`);
+
+    return response.json();
+  });
+
+  if (card !== null) {
+    // Cache by UUID so future getCard() calls are served from disk.
+    atomicWrite(cachePath(card.id), card);
+    // Cache by set+collector for repeat imports without a UUID.
+    atomicWrite(cacheFile, card);
+  }
+
+  return card;
+}
+
+module.exports = { getCard, searchCards, getCardBySetCollector, getCacheAge };

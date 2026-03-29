@@ -11,6 +11,7 @@
 const { Router } = require('express');
 const { getDeck, createDeck } = require('../services/deckService');
 const { exportDeck, parseMtgaText } = require('../services/mtgaService');
+const { getCard, searchCards, getCardBySetCollector } = require('../services/cardService');
 const { validateImport } = require('../middleware/validate');
 
 const router = Router();
@@ -61,7 +62,56 @@ router.post('/decks/:id/export', (req, res) => {
  * @returns {400} { error: string }
  * @returns {500} { error: string }
  */
-router.post('/import', validateImport, (req, res) => {
+/**
+ * Resolves a single parsed card entry to a full Scryfall-enriched card.
+ *
+ * Strategy (in order):
+ *   1. If set_code + collector_number are present, use Scryfall's
+ *      `/cards/:set/:collector_number` — this is the exact printing MTGA exported.
+ *   2. Fall back to an exact-name search `!"<name>"` which returns the most
+ *      recent oracle printing.
+ *   3. If both fail, return a stub entry with scryfall_id: null.
+ *
+ * @param {{ quantity: number, name: string, set_code?: string, collector_number?: string }} c
+ * @param {'mainboard'|'sideboard'} section
+ * @returns {Promise<object>} CardEntry-shaped object
+ */
+async function resolveCardEntry(c, section) {
+  let resolved = null;
+
+  try {
+    if (c.set_code && c.collector_number) {
+      resolved = await getCardBySetCollector(c.set_code, c.collector_number);
+    }
+    if (!resolved) {
+      // Exact-name search: Scryfall syntax !"name" matches only the precise card name.
+      const results = await searchCards(`!"${c.name}"`);
+      resolved = results[0] ?? null;
+    }
+  } catch (err) {
+    // Non-fatal — card will land in unknown[].
+    console.warn(`Import: could not resolve "${c.name}":`, err.message);
+  }
+
+  return {
+    quantity: c.quantity,
+    name: c.name,
+    scryfall_id: resolved?.id ?? null,
+    section,
+    ...(resolved?.mana_cost !== undefined && { mana_cost: resolved.mana_cost }),
+    ...(resolved?.type_line !== undefined && { type_line: resolved.type_line }),
+    ...(resolved?.image_uris
+      ? {
+          image_uris: {
+            small: resolved.image_uris.small,
+            normal: resolved.image_uris.normal,
+          },
+        }
+      : {}),
+  };
+}
+
+router.post('/import', validateImport, async (req, res) => {
   try {
     const { text, name, format } = req.body || {};
 
@@ -69,19 +119,17 @@ router.post('/import', validateImport, (req, res) => {
     // set/collector suffixes, comment lines, and invalid quantities.
     const { mainboard, sideboard } = parseMtgaText(text);
 
-    const toCardEntry = (section) => (c) => ({
-      quantity: c.quantity,
-      name: c.name,
-      scryfall_id: null,
-      section,
-    });
+    // Resolve all cards concurrently — the scryfallLimiter inside cardService
+    // serialises outgoing Scryfall requests to respect the 10 req/s limit.
+    const [cards, sideboardCards] = await Promise.all([
+      Promise.all(mainboard.map((c) => resolveCardEntry(c, 'mainboard'))),
+      Promise.all(sideboard.map((c) => resolveCardEntry(c, 'sideboard'))),
+    ]);
 
-    const cards = mainboard.map(toCardEntry('mainboard'));
-    const sideboardCards = sideboard.map(toCardEntry('sideboard'));
-
-    // All card names go into unknown[] — no Scryfall lookup in Milestone 1.
-    // TODO (Task 2.2): replace with cache lookup, only add unresolved to unknown[].
-    const unknown = [...mainboard, ...sideboard].map((c) => c.name);
+    // Only cards we could not resolve go into unknown[].
+    const unknown = [...cards, ...sideboardCards]
+      .filter((c) => !c.scryfall_id)
+      .map((c) => c.name);
 
     const deck = createDeck({
       name: name.trim(),

@@ -56,8 +56,8 @@ export interface ScryfallCard {
 
 /** Return shape of parseMtgaText (client-side MTGA parser) */
 export interface ParsedDeck {
-  mainboard: Array<{ quantity: number; name: string }>
-  sideboard: Array<{ quantity: number; name: string }>
+  mainboard: Array<{ quantity: number; name: string; set_code?: string; collector_number?: string }>
+  sideboard: Array<{ quantity: number; name: string; set_code?: string; collector_number?: string }>
   unknownLines: string[]
 }
 

@@ -15,8 +15,11 @@
 
 import type { ParsedDeck } from '../types'
 
-/** Strips MTGA Arena set/collector suffix: " (FDN) 279", " (PRM) ★", etc. */
-const MTGA_SUFFIX_RE = /\s+\([A-Z0-9]+\)\s+[\w★]+$/
+/**
+ * Captures MTGA Arena set/collector suffix: " (FDN) 279", " (PRM) ★", etc.
+ * Group 1 = set code, group 2 = collector number.
+ */
+const MTGA_SUFFIX_RE = /\s+\(([A-Z0-9]+)\)\s+([\w★]+)$/
 
 /** Section header keywords emitted by the MTGA Arena export tool. */
 const SECTION_HEADERS = new Set(['Deck', 'Sideboard', 'Commander'])
@@ -33,8 +36,8 @@ export function parseMtgaText(text: string | null | undefined): ParsedDeck {
   const normalised = (text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
   const lines = normalised.split('\n')
 
-  const mainboard: Array<{ quantity: number; name: string }> = []
-  const sideboard: Array<{ quantity: number; name: string }> = []
+  const mainboard: Array<{ quantity: number; name: string; set_code?: string; collector_number?: string }> = []
+  const sideboard: Array<{ quantity: number; name: string; set_code?: string; collector_number?: string }> = []
   const unknownLines: string[] = []
 
   let inSideboard = false
@@ -68,20 +71,27 @@ export function parseMtgaText(text: string | null | undefined): ParsedDeck {
     const quantity = parseInt(match[1], 10)
     if (quantity <= 0) continue
 
-    const name = match[2].trim().replace(MTGA_SUFFIX_RE, '').trim()
+    const rawName = match[2].trim()
+    const suffixMatch = rawName.match(MTGA_SUFFIX_RE)
+    const name = suffixMatch
+      ? rawName.slice(0, rawName.length - suffixMatch[0].length).trim()
+      : rawName
+    const set_code = suffixMatch?.[1]
+    const collector_number = suffixMatch?.[2]
+
     if (inSideboard) {
       const existing = sideboard.find((c) => c.name === name)
       if (existing) {
         existing.quantity += quantity
       } else {
-        sideboard.push({ quantity, name })
+        sideboard.push({ quantity, name, set_code, collector_number })
       }
     } else {
       const existing = mainboard.find((c) => c.name === name)
       if (existing) {
         existing.quantity += quantity
       } else {
-        mainboard.push({ quantity, name })
+        mainboard.push({ quantity, name, set_code, collector_number })
         hasMainboardCards = true
       }
     }

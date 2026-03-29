@@ -100,24 +100,33 @@ describe('parseMtgaText — simple format', () => {
 // ── parseMtgaText — (b) full MTGA Arena '{qty} {name} ({set}) {collector}' ───
 
 describe('parseMtgaText — MTGA Arena export format', () => {
-  it('strips numeric set/collector suffix', () => {
+  it('strips numeric set/collector suffix from name', () => {
     const { mainboard } = parseMtgaText('8 Mountain (FDN) 279');
-    expect(mainboard).toEqual([{ quantity: 8, name: 'Mountain' }]);
+    expect(mainboard[0].name).toBe('Mountain');
+    expect(mainboard[0].quantity).toBe(8);
+    expect(mainboard[0].set_code).toBe('FDN');
+    expect(mainboard[0].collector_number).toBe('279');
   });
 
   it('handles multi-word names with set suffix', () => {
     const { mainboard } = parseMtgaText('2 Dawnwing Marshal (FDN) 570');
-    expect(mainboard).toEqual([{ quantity: 2, name: 'Dawnwing Marshal' }]);
+    expect(mainboard[0].name).toBe('Dawnwing Marshal');
+    expect(mainboard[0].set_code).toBe('FDN');
+    expect(mainboard[0].collector_number).toBe('570');
   });
 
   it('handles comma in name before set suffix', () => {
     const { mainboard } = parseMtgaText('1 Aurelia, the Warleader (FDN) 651');
-    expect(mainboard).toEqual([{ quantity: 1, name: 'Aurelia, the Warleader' }]);
+    expect(mainboard[0].name).toBe('Aurelia, the Warleader');
+    expect(mainboard[0].set_code).toBe('FDN');
+    expect(mainboard[0].collector_number).toBe('651');
   });
 
   it('handles apostrophe in name before set suffix', () => {
     const { mainboard } = parseMtgaText("2 Teferi's Protection (CMR) 46");
-    expect(mainboard).toEqual([{ quantity: 2, name: "Teferi's Protection" }]);
+    expect(mainboard[0].name).toBe("Teferi's Protection");
+    expect(mainboard[0].set_code).toBe('CMR');
+    expect(mainboard[0].collector_number).toBe('46');
   });
 
   it('handles different set codes', () => {
@@ -133,19 +142,25 @@ describe('parseMtgaText — MTGA Arena export format', () => {
   });
 
   // (h) promo collector token ★
-  it('strips promo star (★) collector number', () => {
+  it('captures promo star (★) collector number', () => {
     const { mainboard } = parseMtgaText('1 Swamp (PRM) ★');
-    expect(mainboard).toEqual([{ quantity: 1, name: 'Swamp' }]);
+    expect(mainboard[0].name).toBe('Swamp');
+    expect(mainboard[0].set_code).toBe('PRM');
+    expect(mainboard[0].collector_number).toBe('★');
   });
 
-  it('strips alphanumeric promo collector number', () => {
+  it('captures alphanumeric promo collector number', () => {
     const { mainboard } = parseMtgaText('2 Island (SLD) 2017F');
-    expect(mainboard).toEqual([{ quantity: 2, name: 'Island' }]);
+    expect(mainboard[0].name).toBe('Island');
+    expect(mainboard[0].set_code).toBe('SLD');
+    expect(mainboard[0].collector_number).toBe('2017F');
   });
 
-  it('strips variant frame collector suffix (e.g. 279a)', () => {
+  it('captures variant frame collector suffix (e.g. 279a)', () => {
     const { mainboard } = parseMtgaText('4 Mountain (ZNR) 279a');
-    expect(mainboard).toEqual([{ quantity: 4, name: 'Mountain' }]);
+    expect(mainboard[0].name).toBe('Mountain');
+    expect(mainboard[0].set_code).toBe('ZNR');
+    expect(mainboard[0].collector_number).toBe('279a');
   });
 });
 
@@ -255,21 +270,22 @@ describe('parseMtgaText — multi-printing deduplication', () => {
     const text = '1 Wind-Scarred Crag (FDN) 271\n3 Wind-Scarred Crag (M21) 259';
     const { mainboard } = parseMtgaText(text);
     expect(mainboard).toHaveLength(1);
-    expect(mainboard[0]).toEqual({ quantity: 4, name: 'Wind-Scarred Crag' });
+    // set_code/collector_number come from the first occurrence
+    expect(mainboard[0]).toEqual({ quantity: 4, name: 'Wind-Scarred Crag', set_code: 'FDN', collector_number: '271' });
   });
 
   it('merges two printings of the same sideboard card into one entry', () => {
     const text = '4 Lightning Bolt\n\n1 Smash to Smithereens (FDN) 1\n2 Smash to Smithereens (M21) 2';
     const { sideboard } = parseMtgaText(text);
     expect(sideboard).toHaveLength(1);
-    expect(sideboard[0]).toEqual({ quantity: 3, name: 'Smash to Smithereens' });
+    expect(sideboard[0]).toEqual({ quantity: 3, name: 'Smash to Smithereens', set_code: 'FDN', collector_number: '1' });
   });
 
   it('sums quantities correctly across more than two printings', () => {
     const text = '2 Mountain (FDN) 279\n3 Mountain (M21) 100\n1 Mountain (ZNR) 280';
     const { mainboard } = parseMtgaText(text);
     expect(mainboard).toHaveLength(1);
-    expect(mainboard[0]).toEqual({ quantity: 6, name: 'Mountain' });
+    expect(mainboard[0]).toEqual({ quantity: 6, name: 'Mountain', set_code: 'FDN', collector_number: '279' });
   });
 });
 
