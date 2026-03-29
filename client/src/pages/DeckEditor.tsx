@@ -4,11 +4,16 @@ import axios from 'axios'
 import { useDecks } from '../hooks/useDecks'
 import { useToastContext } from '../context/ToastContext'
 import CardRow from '../components/CardRow'
+import CardGridView from '../components/CardGridView'
+import CardCompactView from '../components/CardCompactView'
+import CardDetailModal from '../components/CardDetailModal'
 import CardSearch from '../components/CardSearch'
 import ImportModal from '../components/ImportModal'
 import Spinner from '../components/Spinner'
 import FormatSelect from '../components/FormatSelect'
 import type { CardEntry, ScryfallCard } from '../types'
+
+type ViewMode = 'grid' | 'compact' | 'list'
 
 type LoadState = 'loading' | 'ready' | 'error'
 type ExportStatus = 'idle' | 'copied' | 'error'
@@ -73,6 +78,8 @@ function DeckEditor() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle')
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [detailCard, setDetailCard] = useState<CardEntry | null>(null)
 
   // ── Auto-save debounce ────────────────────────────────────────────────────
   /** Accumulates all unsaved changes; flushed together when the timer fires. */
@@ -237,6 +244,7 @@ function DeckEditor() {
               section: 'mainboard',
               mana_cost: card.mana_cost,
               type_line: card.type_line,
+              image_uris: card.image_uris,
             },
           ]
       setMainboard(updated)
@@ -256,6 +264,7 @@ function DeckEditor() {
               section: 'sideboard',
               mana_cost: card.mana_cost,
               type_line: card.type_line,
+              image_uris: card.image_uris,
             },
           ]
       setSideboard(updated)
@@ -383,6 +392,38 @@ function DeckEditor() {
 
         {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* View mode toggle */}
+          <div
+            className="flex rounded-lg border border-gray-300 bg-white overflow-hidden"
+            role="group"
+            aria-label="Card view mode"
+            data-testid="view-mode-toggle"
+          >
+            {(
+              [
+                { mode: 'grid', label: 'Grid', icon: '⊞' },
+                { mode: 'compact', label: 'Compact', icon: '≡' },
+                { mode: 'list', label: 'List', icon: '☰' },
+              ] as { mode: ViewMode; label: string; icon: string }[]
+            ).map(({ mode, label, icon }) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                aria-pressed={viewMode === mode}
+                title={label}
+                className={`px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset ${
+                  viewMode === mode
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+                data-testid={`view-mode-${mode}`}
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             onClick={() => setIsSearchOpen(true)}
@@ -435,6 +476,20 @@ function DeckEditor() {
           <p className="text-sm text-gray-400" data-testid="mainboard-empty">
             No mainboard cards yet. Use + Add Card to get started.
           </p>
+        ) : viewMode === 'grid' ? (
+          <CardGridView
+            cards={mainboard}
+            onQuantityChange={handleMainQuantityChange}
+            onRemove={handleMainRemove}
+            onCardClick={setDetailCard}
+          />
+        ) : viewMode === 'compact' ? (
+          <CardCompactView
+            cards={mainboard}
+            onQuantityChange={handleMainQuantityChange}
+            onRemove={handleMainRemove}
+            onCardClick={setDetailCard}
+          />
         ) : (
           <div className="space-y-1">
             {mainboard.map((card) => (
@@ -463,6 +518,20 @@ function DeckEditor() {
           <p className="text-sm text-gray-400" data-testid="sideboard-empty">
             No sideboard cards yet.
           </p>
+        ) : viewMode === 'grid' ? (
+          <CardGridView
+            cards={sideboard}
+            onQuantityChange={handleSideQuantityChange}
+            onRemove={handleSideRemove}
+            onCardClick={setDetailCard}
+          />
+        ) : viewMode === 'compact' ? (
+          <CardCompactView
+            cards={sideboard}
+            onQuantityChange={handleSideQuantityChange}
+            onRemove={handleSideRemove}
+            onCardClick={setDetailCard}
+          />
         ) : (
           <div className="space-y-1">
             {sideboard.map((card) => (
@@ -505,6 +574,33 @@ function DeckEditor() {
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
       />
+
+      {/* ── Card detail modal ── */}
+      {detailCard && (
+        <CardDetailModal
+          scryfallId={detailCard.scryfall_id ?? undefined}
+          name={detailCard.name}
+          onClose={() => setDetailCard(null)}
+          deckControls={{
+            quantity: detailCard.quantity,
+            onQuantityChange: (qty) => {
+              const isMain = mainboard.some((c) => c.name === detailCard.name)
+              if (isMain) {
+                handleMainQuantityChange(detailCard.name, qty)
+              } else {
+                handleSideQuantityChange(detailCard.name, qty)
+              }
+              setDetailCard((prev) => prev ? { ...prev, quantity: qty } : null)
+            },
+            onRemove: () => {
+              const isMain = mainboard.some((c) => c.name === detailCard.name)
+              if (isMain) handleMainRemove(detailCard.name)
+              else handleSideRemove(detailCard.name)
+              setDetailCard(null)
+            },
+          }}
+        />
+      )}
     </main>
   )
 }

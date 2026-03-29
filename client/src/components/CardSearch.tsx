@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import CloseButton from './CloseButton'
 import Spinner from './Spinner'
 import CardResultItem from './CardResultItem'
+import CardDetailModal from './CardDetailModal'
 import type { ScryfallCard } from '../types'
 
 interface CardSearchProps {
@@ -31,6 +32,7 @@ function CardSearch({ sectionNames, onAddToSection, isOpen = true, onClose }: Ca
   const [error, setError] = useState<string | null>(null)
   /** True once at least one search has resolved, to enable "no results" state. */
   const [hasSearched, setHasSearched] = useState(false)
+  const [detailCard, setDetailCard] = useState<ScryfallCard | null>(null)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -213,12 +215,28 @@ function CardSearch({ sectionNames, onAddToSection, isOpen = true, onClose }: Ca
                   card={card}
                   sectionNames={sectionNames}
                   onAddToSection={onAddToSection}
+                  onImageClick={setDetailCard}
                 />
               ))}
             </ul>
           )}
         </div>
       </aside>
+
+      {/* Card detail modal — search mode (section picker) */}
+      {detailCard && (
+        <CardDetailModal
+          card={detailCard}
+          onClose={() => setDetailCard(null)}
+          searchControls={{
+            sectionNames,
+            onAddToSection: (section) => {
+              onAddToSection(detailCard, section)
+              setDetailCard(null)
+            },
+          }}
+        />
+      )}
     </>
   )
 }

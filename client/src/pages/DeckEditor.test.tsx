@@ -350,6 +350,9 @@ describe('DeckEditor — quantity controls via CardRow', () => {
     renderEditor()
     await waitFor(() => screen.getByText('Lightning Bolt'))
 
+    // Switch to list view so CardRow renders (default is grid)
+    fireEvent.click(screen.getByTestId('view-mode-list'))
+
     const incrementBtns = screen.getAllByTestId('increment-btn')
     fireEvent.click(incrementBtns[0]) // first mainboard card
 
@@ -379,6 +382,9 @@ describe('DeckEditor — quantity controls via CardRow', () => {
     renderEditor()
     await waitFor(() => screen.getByText('Mountain'))
 
+    // Switch to list view so CardRow renders (default is grid)
+    fireEvent.click(screen.getByTestId('view-mode-list'))
+
     fireEvent.click(screen.getByTestId('decrement-btn'))
 
     await waitFor(() => expect(screen.queryByText('Mountain')).not.toBeInTheDocument())
@@ -387,6 +393,9 @@ describe('DeckEditor — quantity controls via CardRow', () => {
   it('removes card when the remove button is clicked', async () => {
     renderEditor()
     await waitFor(() => screen.getByText('Lightning Bolt'))
+
+    // Switch to list view so CardRow renders (default is grid)
+    fireEvent.click(screen.getByTestId('view-mode-list'))
 
     const removeBtns = screen.getAllByTestId('remove-btn')
     fireEvent.click(removeBtns[0])

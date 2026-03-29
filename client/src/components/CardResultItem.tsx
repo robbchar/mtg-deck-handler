@@ -6,6 +6,7 @@ interface CardResultItemProps {
   card: ScryfallCard
   sectionNames: string[]
   onAddToSection: (card: ScryfallCard, sectionId: string) => void
+  onImageClick?: (card: ScryfallCard) => void
 }
 
 function getSmallImage(card: ScryfallCard): string | null {
@@ -20,7 +21,7 @@ function getNormalImage(card: ScryfallCard): string | null {
   return null
 }
 
-export default function CardResultItem({ card, sectionNames, onAddToSection }: CardResultItemProps) {
+export default function CardResultItem({ card, sectionNames, onAddToSection, onImageClick }: CardResultItemProps) {
   const [thumbError, setThumbError] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -31,18 +32,26 @@ export default function CardResultItem({ card, sectionNames, onAddToSection }: C
   return (
     <li className="flex flex-col gap-2 rounded-md border border-slate-700 bg-slate-800 p-2">
       <div className="flex items-center gap-3">
-        {/* Thumbnail */}
-        {showThumb ? (
-          <img
-            src={smallSrc!}
-            alt={card.name}
-            loading="lazy"
-            onError={() => setThumbError(true)}
-            className="h-14 w-10 shrink-0 rounded object-cover"
-          />
-        ) : (
-          <CardImagePlaceholder className="h-14 w-10 shrink-0" />
-        )}
+        {/* Thumbnail — 2× larger; clicking opens detail modal */}
+        <button
+          type="button"
+          onClick={() => onImageClick?.(card)}
+          className="shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-400 rounded"
+          aria-label={`View details for ${card.name}`}
+          tabIndex={onImageClick ? 0 : -1}
+        >
+          {showThumb ? (
+            <img
+              src={smallSrc!}
+              alt={card.name}
+              loading="lazy"
+              onError={() => setThumbError(true)}
+              className="h-28 w-20 rounded object-cover"
+            />
+          ) : (
+            <CardImagePlaceholder className="h-28 w-20" />
+          )}
+        </button>
 
         {/* Card info */}
         <div className="min-w-0 flex-1">
