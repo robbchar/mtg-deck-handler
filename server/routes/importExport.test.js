@@ -4,9 +4,11 @@ const request = require('supertest');
 
 jest.mock('../services/deckService');
 jest.mock('../services/mtgaService');
+jest.mock('../services/cardService');
 
 const deckService = require('../services/deckService');
 const mtgaService = require('../services/mtgaService');
+const cardService = require('../services/cardService');
 const app = require('../index');
 
 const MOCK_DECK = {
@@ -30,6 +32,9 @@ const MTGA_TEXT = '4 Lightning Bolt\n\n2 Smash to Smithereens';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default: no Scryfall results — all cards remain unresolved (scryfall_id: null).
+  cardService.searchCards.mockResolvedValue([]);
+  cardService.getCardBySetCollector.mockResolvedValue(null);
 });
 
 // ── POST /api/decks/:id/export ─────────────────────────────────────────────────
@@ -220,6 +225,15 @@ describe('POST /api/import', () => {
     expect(res.statusCode).toBe(500);
   });
 
+  it('cards that cannot be resolved still produce a 201 (non-fatal)', async () => {
+    cardService.searchCards.mockRejectedValue(new Error('Scryfall unreachable'));
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.createDeck.mockReturnValue(MOCK_DECK);
+
+    const res = await request(app).post('/api/import').send({ text: MTGA_TEXT, name: 'Mono Red' });
+    expect(res.statusCode).toBe(201);
+  });
+
   it('works without an optional format field', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
     deckService.createDeck.mockReturnValue(MOCK_DECK);
@@ -331,5 +345,95 @@ describe('POST /api/import', () => {
     for (const n of cardNames) {
       expect(n).not.toMatch(/\([A-Z0-9]+\)\s+[\w★]+/);
     }
+  });
+});
+
+// ── POST /api/import — Scryfall card resolution ───────────────────────────────
+
+describe('POST /api/import — Scryfall resolution (mocked cardService)', () => {
+  const SCRYFALL_CARD = {
+    id: 'scryfall-abc',
+    name: 'Lightning Bolt',
+    mana_cost: '{R}',
+    type_line: 'Instant',
+    image_uris: { small: 'https://example.com/small.jpg', normal: 'https://example.com/normal.jpg' },
+  };
+
+  it('stores scryfall_id and image_uris when searchCards resolves the card', async () => {
+    cardService.searchCards.mockResolvedValue([SCRYFALL_CARD]);
+    mtgaService.parseMtgaText.mockReturnValue({
+      mainboard: [{ quantity: 4, name: 'Lightning Bolt' }],
+      sideboard: [],
+      unknown: [],
+    });
+    deckService.createDeck.mockReturnValue(MOCK_DECK);
+
+    await request(app).post('/api/import').send({ text: '4 Lightning Bolt', name: 'Mono Red' });
+
+    const callArg = deckService.createDeck.mock.calls[0][0];
+    expect(callArg.cards[0].scryfall_id).toBe('scryfall-abc');
+    expect(callArg.cards[0].mana_cost).toBe('{R}');
+    expect(callArg.cards[0].image_uris).toEqual({
+      small: 'https://example.com/small.jpg',
+      normal: 'https://example.com/normal.jpg',
+    });
+  });
+
+  it('resolved cards are not placed in unknown[]', async () => {
+    cardService.searchCards.mockResolvedValue([SCRYFALL_CARD]);
+    mtgaService.parseMtgaText.mockReturnValue({
+      mainboard: [{ quantity: 4, name: 'Lightning Bolt' }],
+      sideboard: [],
+      unknown: [],
+    });
+    deckService.createDeck.mockReturnValue(MOCK_DECK);
+
+    await request(app).post('/api/import').send({ text: '4 Lightning Bolt', name: 'Mono Red' });
+
+    const callArg = deckService.createDeck.mock.calls[0][0];
+    expect(callArg.unknown).not.toContain('Lightning Bolt');
+  });
+
+  it('uses getCardBySetCollector when set_code and collector_number are present', async () => {
+    const mountainCard = {
+      id: 'mountain-anb-114',
+      name: 'Mountain',
+      mana_cost: '',
+      type_line: 'Basic Land — Mountain',
+      image_uris: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' },
+    };
+    cardService.getCardBySetCollector.mockResolvedValue(mountainCard);
+    mtgaService.parseMtgaText.mockReturnValue({
+      mainboard: [{ quantity: 9, name: 'Mountain', set_code: 'ANB', collector_number: '114' }],
+      sideboard: [],
+      unknown: [],
+    });
+    deckService.createDeck.mockReturnValue(MOCK_DECK);
+
+    await request(app).post('/api/import').send({ text: '9 Mountain (ANB) 114', name: 'Lands' });
+
+    expect(cardService.getCardBySetCollector).toHaveBeenCalledWith('ANB', '114');
+    // Set+collector resolved successfully — no fallback to searchCards needed
+    expect(cardService.searchCards).not.toHaveBeenCalled();
+    const callArg = deckService.createDeck.mock.calls[0][0];
+    expect(callArg.cards[0].scryfall_id).toBe('mountain-anb-114');
+  });
+
+  it('falls back to searchCards when getCardBySetCollector returns null', async () => {
+    cardService.getCardBySetCollector.mockResolvedValue(null);
+    cardService.searchCards.mockResolvedValue([SCRYFALL_CARD]);
+    mtgaService.parseMtgaText.mockReturnValue({
+      mainboard: [{ quantity: 4, name: 'Lightning Bolt', set_code: 'FDN', collector_number: '999' }],
+      sideboard: [],
+      unknown: [],
+    });
+    deckService.createDeck.mockReturnValue(MOCK_DECK);
+
+    await request(app).post('/api/import').send({ text: '4 Lightning Bolt (FDN) 999', name: 'Test' });
+
+    expect(cardService.getCardBySetCollector).toHaveBeenCalledWith('FDN', '999');
+    expect(cardService.searchCards).toHaveBeenCalledWith('!"Lightning Bolt"');
+    const callArg = deckService.createDeck.mock.calls[0][0];
+    expect(callArg.cards[0].scryfall_id).toBe('scryfall-abc');
   });
 });

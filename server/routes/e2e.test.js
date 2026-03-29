@@ -32,6 +32,17 @@ beforeEach(() => {
   process.env.DATA_DIR = tempDir;
 
   jest.resetModules();
+
+  // Mock cardService so no real Scryfall HTTP requests fire during e2e tests.
+  // All card lookups return null/[] — cards remain unresolved (scryfall_id: null)
+  // and all names appear in unknown[], which is what the existing assertions check.
+  jest.doMock('../services/cardService', () => ({
+    getCard: jest.fn().mockResolvedValue(null),
+    searchCards: jest.fn().mockResolvedValue([]),
+    getCardBySetCollector: jest.fn().mockResolvedValue(null),
+    getCacheAge: jest.fn().mockReturnValue(null),
+  }));
+
   // Correct relative path: e2e.test.js lives in server/routes/, index.js in server/
   app = require('../index');
 });
