@@ -14,7 +14,7 @@ fully offline without it.
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   React Frontend                     │
-│  DeckList │ DeckEditor │ CardSearch │ ImportExport   │
+│  DeckList │ DeckEditor │ CardSearch │ ImportModal    │
 └─────────────────────┬───────────────────────────────┘
                       │ fetch/axios
 ┌─────────────────────▼───────────────────────────────┐
@@ -131,10 +131,10 @@ Sections separated by blank line (mainboard then sideboard).
 ### Deck Editor (`/deck/:id`)
 - Deck name and format (editable inline)
 - Mainboard and sideboard sections with card rows (quantity, name, mana cost, type)
-- Notes textarea (markdown rendered on view, raw on edit)
+- Notes textarea (auto-saves on blur)
 - Add card via search (opens card search panel)
 - Remove card / adjust quantity
-- Import / Export buttons
+- Export button (copies MTGA text to clipboard)
 
 ### Card Search Panel (slide-in)
 - Text search → calls `/api/cards/search`
@@ -168,24 +168,25 @@ mtg-deck-manager/
 ├── client/                  # React frontend
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── DeckCard.jsx
-│   │   │   ├── DeckEditor.jsx
-│   │   │   ├── CardRow.jsx
-│   │   │   ├── CardSearch.jsx
-│   │   │   ├── ImportModal.jsx
-│   │   │   └── ExportModal.jsx
+│   │   │   ├── DeckCard.tsx
+│   │   │   ├── CardRow.tsx
+│   │   │   ├── CardSearch.tsx
+│   │   │   ├── ImportModal.tsx
+│   │   │   ├── ImportPreview.tsx
+│   │   │   └── Spinner.tsx
 │   │   ├── context/
-│   │   │   └── DeckContext.jsx
+│   │   │   ├── DeckContext.tsx
+│   │   │   └── ToastContext.tsx
 │   │   ├── hooks/
-│   │   │   ├── useDecks.js
-│   │   │   └── useCards.js
+│   │   │   ├── useDecks.ts
+│   │   │   └── useCards.ts
 │   │   ├── pages/
-│   │   │   ├── DeckList.jsx
-│   │   │   └── DeckEditor.jsx
+│   │   │   ├── DeckList.tsx
+│   │   │   └── DeckEditor.tsx
 │   │   ├── utils/
-│   │   │   └── mtgaFormat.js   # MTGA text parsing/generation
-│   │   ├── App.jsx
-│   │   └── main.jsx
+│   │   │   └── mtgaFormat.ts   # MTGA text parsing/generation
+│   │   ├── App.tsx
+│   │   └── main.tsx
 │   ├── index.html
 │   └── vite.config.js
 │
