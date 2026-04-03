@@ -70,7 +70,6 @@ function DeckEditor() {
   const [isEditingName, setIsEditingName] = useState(false)
   const [nameValue, setNameValue] = useState('')
   const [format, setFormat] = useState('')
-  const [notes, setNotes] = useState('')
   const [mainboard, setMainboard] = useState<CardEntry[]>([])
   const [sideboard, setSideboard] = useState<CardEntry[]>([])
 
@@ -143,7 +142,6 @@ function DeckEditor() {
       setNameValue(deck.name ?? '')
       savedNameRef.current = deck.name ?? ''
       setFormat(deck.format ?? '')
-      setNotes(deck.notes ?? '')
       setMainboard(deck.cards ?? [])
       setSideboard(deck.sideboard ?? [])
       setLoadState('ready')
@@ -186,12 +184,6 @@ function DeckEditor() {
     const val = e.target.value
     setFormat(val)
     scheduleAutoSave({ format: val })
-  }
-
-  // ── Notes handler ─────────────────────────────────────────────────────────
-
-  function handleNotesBlur() {
-    scheduleAutoSave({ notes })
   }
 
   // ── Mainboard handlers ────────────────────────────────────────────────────
@@ -464,6 +456,15 @@ function DeckEditor() {
         </div>
       </header>
 
+      {/* ── Game Logger ── */}
+      <section className="mb-8" data-testid="game-logger-wrapper">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Game Log</h2>
+        <GameLogger cards={mainboard} onSubmit={handleLogGame} />
+        <div className="mt-4">
+          <GameLogList games={games} />
+        </div>
+      </section>
+
       {/* ── Mainboard ── */}
       <section className="mb-8" data-testid="mainboard-section">
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-gray-900">
@@ -548,28 +549,6 @@ function DeckEditor() {
         )}
       </section>
 
-      {/* ── Notes ── */}
-      <section className="mb-8" data-testid="notes-section">
-        <h2 className="mb-2 text-lg font-semibold text-gray-900">Notes</h2>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={handleNotesBlur}
-          placeholder="Strategy notes, sideboard guide, card explanations…"
-          rows={5}
-          className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          data-testid="notes-textarea"
-        />
-      </section>
-
-      {/* ── Game Logger ── */}
-      <section className="mb-8" data-testid="game-logger-wrapper">
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Game Log</h2>
-        <GameLogger cards={mainboard} onSubmit={handleLogGame} />
-        <div className="mt-4">
-          <GameLogList games={games} />
-        </div>
-      </section>
 
       {/* ── CardSearch panel ── */}
       <CardSearch

@@ -162,13 +162,6 @@ describe('DeckEditor — deck data display', () => {
     )
   })
 
-  it('displays the notes in the textarea', async () => {
-    renderEditor()
-    await waitFor(() =>
-      expect(screen.getByTestId('notes-textarea')).toHaveValue('Go fast.'),
-    )
-  })
-
   it('renders a CardRow for each mainboard card', async () => {
     renderEditor()
     await waitFor(() => expect(screen.getByTestId('mainboard-section')).toBeInTheDocument())
@@ -310,39 +303,6 @@ describe('DeckEditor — format selector', () => {
   })
 })
 
-// ── Notes ─────────────────────────────────────────────────────────────────────
-
-describe('DeckEditor — notes', () => {
-  it('renders the notes textarea', async () => {
-    renderEditor()
-    await waitFor(() =>
-      expect(screen.getByTestId('notes-textarea')).toBeInTheDocument(),
-    )
-  })
-
-  it('schedules auto-save on notes blur', async () => {
-    const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
-
-    renderEditor()
-    await waitFor(() => screen.getByTestId('notes-textarea'))
-
-    fireEvent.change(screen.getByTestId('notes-textarea'), {
-      target: { value: 'Updated strategy.' },
-    })
-    fireEvent.blur(screen.getByTestId('notes-textarea'))
-
-    await waitFor(
-      () =>
-        expect(updateDeck).toHaveBeenCalledWith(
-          'test-deck-id',
-          expect.objectContaining({ notes: 'Updated strategy.' }),
-        ),
-      { timeout: 3500 },
-    )
-  })
-})
-
 // ── Quantity controls ─────────────────────────────────────────────────────────
 
 describe('DeckEditor — quantity controls via CardRow', () => {
@@ -475,14 +435,13 @@ describe('DeckEditor — auto-save', () => {
 
     vi.useFakeTimers()
 
-    // Trigger two changes quickly — they should be batched
+    // Trigger two format changes quickly — they should be batched into one call
     fireEvent.change(screen.getByTestId('deck-format-select'), {
       target: { value: 'legacy' },
     })
-    fireEvent.change(screen.getByTestId('notes-textarea'), {
-      target: { value: 'New notes' },
+    fireEvent.change(screen.getByTestId('deck-format-select'), {
+      target: { value: 'modern' },
     })
-    fireEvent.blur(screen.getByTestId('notes-textarea'))
 
     // Flush debounce timer (debounce is 2000ms)
     await act(async () => {
@@ -492,7 +451,7 @@ describe('DeckEditor — auto-save', () => {
     expect(updateDeck).toHaveBeenCalledTimes(1)
     expect(updateDeck).toHaveBeenCalledWith(
       'test-deck-id',
-      expect.objectContaining({ format: 'legacy', notes: 'New notes' }),
+      expect.objectContaining({ format: 'modern' }),
     )
 
     vi.useRealTimers()
@@ -509,11 +468,10 @@ describe('DeckEditor — auto-save', () => {
     // Take over the clock so the debounce timer never fires on its own
     vi.useFakeTimers()
 
-    // Edit notes and blur — this schedules a pending save but the timer is frozen
-    fireEvent.change(screen.getByTestId('notes-textarea'), {
-      target: { value: 'Notes before navigation.' },
+    // Change format — this schedules a pending save but the timer is frozen
+    fireEvent.change(screen.getByTestId('deck-format-select'), {
+      target: { value: 'legacy' },
     })
-    fireEvent.blur(screen.getByTestId('notes-textarea'))
 
     // Confirm the debounce hasn't fired yet
     expect(updateDeck).not.toHaveBeenCalled()
@@ -527,7 +485,7 @@ describe('DeckEditor — auto-save', () => {
     expect(updateDeck).toHaveBeenCalledTimes(1)
     expect(updateDeck).toHaveBeenCalledWith(
       'test-deck-id',
-      expect.objectContaining({ notes: 'Notes before navigation.' }),
+      expect.objectContaining({ format: 'legacy' }),
     )
 
     vi.useRealTimers()
