@@ -61,6 +61,37 @@ export interface ParsedDeck {
   unknownLines: string[]
 }
 
+// ── Game log types ────────────────────────────────────────────────────────────
+
+export type GameResult = 'win' | 'loss'
+export type OpponentColor = 'W' | 'U' | 'B' | 'R' | 'G'
+export type OpponentArchetype = 'aggro' | 'midrange' | 'control' | 'combo' | 'unknown'
+export type OpeningHandFeel = 'flood' | 'good' | 'screw'
+
+export interface GameEntry {
+  id: string
+  logged_at: string
+  result: GameResult
+  turn_ended: number | null
+  opponent_colors: OpponentColor[]
+  opponent_archetype: OpponentArchetype | null
+  opening_hand_feel: OpeningHandFeel | null
+  cards_in_hand: string[]
+  tough_opponent_card: string
+  notes: string
+}
+
+export interface NewGameEntry {
+  result: GameResult
+  turn_ended?: number | null
+  opponent_colors?: OpponentColor[]
+  opponent_archetype?: OpponentArchetype | null
+  opening_hand_feel?: OpeningHandFeel | null
+  cards_in_hand?: string[]
+  tough_opponent_card?: string
+  notes?: string
+}
+
 // ── Reducer types ─────────────────────────────────────────────────────────────
 
 export interface DeckState {

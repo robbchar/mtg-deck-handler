@@ -16,9 +16,11 @@ const cors = require('cors');
 const dataDir = path.resolve(__dirname, process.env.DATA_DIR || '../data');
 const decksDir = path.join(dataDir, 'decks');
 const cacheDir = path.join(dataDir, 'cache');
+const gamesDir = path.join(dataDir, 'games');
 
 fs.mkdirSync(decksDir, { recursive: true });
 fs.mkdirSync(cacheDir, { recursive: true });
+fs.mkdirSync(gamesDir, { recursive: true });
 
 const app = express();
 
@@ -54,6 +56,13 @@ try {
   app.use('/api', importExportRoutes);
 } catch (err) {
   console.error('Optional route not loaded (routes/importExport):', err.stack);
+}
+
+try {
+  const gameRoutes = require('./routes/games');
+  app.use('/api/decks/:id/games', gameRoutes);
+} catch (err) {
+  console.error('Optional route not loaded (routes/games):', err.stack);
 }
 
 // ── Global error handler ──────────────────────────────────────────────────────
