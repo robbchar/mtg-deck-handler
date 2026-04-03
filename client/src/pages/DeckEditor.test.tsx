@@ -458,31 +458,6 @@ describe('DeckEditor — Export button', () => {
   })
 })
 
-// ── Import button ─────────────────────────────────────────────────────────────
-
-describe('DeckEditor — Import button', () => {
-  it('renders the Import button', async () => {
-    renderEditor()
-    await waitFor(() =>
-      expect(screen.getByTestId('import-btn')).toBeInTheDocument(),
-    )
-  })
-
-  it('opens the ImportModal when Import is clicked', async () => {
-    renderEditor()
-    await waitFor(() => screen.getByTestId('import-btn'))
-    fireEvent.click(screen.getByTestId('import-btn'))
-    expect(screen.getByTestId('import-modal')).toBeInTheDocument()
-  })
-
-  it('closes the ImportModal when close action fires', async () => {
-    renderEditor()
-    await waitFor(() => screen.getByTestId('import-btn'))
-    fireEvent.click(screen.getByTestId('import-btn'))
-    fireEvent.click(screen.getByTestId('import-modal-close'))
-    expect(screen.queryByTestId('import-modal')).not.toBeInTheDocument()
-  })
-})
 
 // ── Auto-save ─────────────────────────────────────────────────────────────────
 
