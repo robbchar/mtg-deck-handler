@@ -8,7 +8,6 @@ import CardGridView from '../components/CardGridView'
 import CardCompactView from '../components/CardCompactView'
 import CardDetailModal from '../components/CardDetailModal'
 import CardSearch from '../components/CardSearch'
-import ImportModal from '../components/ImportModal'
 import Spinner from '../components/Spinner'
 import FormatSelect from '../components/FormatSelect'
 import type { CardEntry, ScryfallCard } from '../types'
@@ -76,7 +75,6 @@ function DeckEditor() {
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [isImportOpen, setIsImportOpen] = useState(false)
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [detailCard, setDetailCard] = useState<CardEntry | null>(null)
@@ -452,14 +450,6 @@ function DeckEditor() {
               : 'Export'}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsImportOpen(true)}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            data-testid="import-btn"
-          >
-            Import
-          </button>
         </div>
       </header>
 
@@ -567,12 +557,6 @@ function DeckEditor() {
         onClose={() => setIsSearchOpen(false)}
         sectionNames={['mainboard', 'sideboard']}
         onAddToSection={handleAddCard}
-      />
-
-      {/* ── ImportModal ── */}
-      <ImportModal
-        isOpen={isImportOpen}
-        onClose={() => setIsImportOpen(false)}
       />
 
       {/* ── Card detail modal ── */}
