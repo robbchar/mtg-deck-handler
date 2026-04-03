@@ -1,0 +1,45 @@
+'use strict';
+
+/**
+ * Game log API routes — per-deck game logging.
+ *
+ * Mounted at /api/decks in index.js (nested under the deck id).
+ */
+
+const { Router } = require('express');
+const { getGames, addGame } = require('../services/gameService');
+
+const router = Router({ mergeParams: true });
+
+/**
+ * GET /api/decks/:id/games
+ * Returns all logged games for a deck, newest first.
+ */
+router.get('/', (req, res) => {
+  try {
+    const games = getGames(req.params.id);
+    res.json(games);
+  } catch (err) {
+    console.error('GET /api/decks/:id/games error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/decks/:id/games
+ * Appends a new game entry. `result` ("win" | "loss") is required.
+ */
+router.post('/', (req, res) => {
+  try {
+    const entry = addGame(req.params.id, req.body || {});
+    res.status(201).json(entry);
+  } catch (err) {
+    if (err.message && err.message.startsWith('result is required')) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('POST /api/decks/:id/games error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+module.exports = router;

@@ -1,0 +1,78 @@
+import { useState, useEffect, useCallback } from 'react'
+import axios from 'axios'
+import type { GameEntry, NewGameEntry } from '../types'
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  const e = err as { response?: { data?: { error?: string } }; message?: string }
+  return e?.response?.data?.error ?? e?.message ?? fallback
+}
+
+/**
+ * Fetches and manages the game log for a single deck.
+ *
+ * Fetches on mount. Exposes `addGame` which POSTs a new entry and refreshes
+ * the list on success.
+ */
+export function useGames(deckId: string | undefined) {
+  const [games, setGames] = useState<GameEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchGames = useCallback(async () => {
+    if (!deckId) return
+    setLoading(true)
+    setError(null)
+    try {
+      const { data } = await axios.get<GameEntry[]>(`/api/decks/${deckId}/games`)
+      setGames(data)
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to load game log'))
+    } finally {
+      setLoading(false)
+    }
+  }, [deckId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      if (!deckId) return
+      setLoading(true)
+      setError(null)
+      try {
+        const { data } = await axios.get<GameEntry[]>(`/api/decks/${deckId}/games`)
+        if (!cancelled) setGames(data)
+      } catch (err) {
+        if (!cancelled) setError(getErrorMessage(err, 'Failed to load game log'))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [deckId])
+
+  const addGame = useCallback(
+    async (gameData: NewGameEntry): Promise<GameEntry | null> => {
+      if (!deckId) return null
+      try {
+        const { data: entry } = await axios.post<GameEntry>(
+          `/api/decks/${deckId}/games`,
+          gameData,
+        )
+        // Prepend the new entry (list is newest-first from the API)
+        setGames((prev) => [entry, ...prev])
+        return entry
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to log game'))
+        return null
+      }
+    },
+    [deckId],
+  )
+
+  return { games, loading, error, addGame, refetch: fetchGames }
+}
