@@ -53,17 +53,20 @@ function DeckCard({ deck, onDelete }: DeckCardProps) {
   return (
     <Link
       to={`/deck/${deck.id}`}
-      className="block rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      className="group block h-full rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
       aria-label={`Open deck ${deck.name}`}
     >
-      <article className="flex flex-col justify-between p-5 h-full">
+      <article className="flex h-full flex-col justify-between p-5">
 
         {/* ── Top: name + format badge ── */}
         <div className="mb-4">
           <div className="mb-2 flex items-start justify-between gap-2">
-            <span className="text-lg font-semibold leading-snug text-gray-900 group-hover:text-indigo-600">
+            <h3 
+              className="min-w-0 flex-1 truncate text-lg font-semibold leading-snug text-gray-900 group-hover:text-indigo-600"
+              title={deck.name}
+            >
               {deck.name}
-            </span>
+            </h3>
 
             {deck.format ? (
               <span
