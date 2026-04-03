@@ -2,15 +2,18 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axios from 'axios'
 import { useDecks } from '../hooks/useDecks'
+import { useGames } from '../hooks/useGames'
 import { useToastContext } from '../context/ToastContext'
 import CardRow from '../components/CardRow'
 import CardGridView from '../components/CardGridView'
 import CardCompactView from '../components/CardCompactView'
 import CardDetailModal from '../components/CardDetailModal'
 import CardSearch from '../components/CardSearch'
+import GameLogger from '../components/GameLogger'
+import GameLogList from '../components/GameLogList'
 import Spinner from '../components/Spinner'
 import FormatSelect from '../components/FormatSelect'
-import type { CardEntry, ScryfallCard } from '../types'
+import type { CardEntry, NewGameEntry, ScryfallCard } from '../types'
 
 type ViewMode = 'grid' | 'compact' | 'list'
 
@@ -58,6 +61,7 @@ function DeckEditor() {
   const { id } = useParams<{ id: string }>()
   const { getDeck, updateDeck } = useDecks()
   const { addToast } = useToastContext()
+  const { games, addGame } = useGames(id)
 
   // ── Loading state ─────────────────────────────────────────────────────────
   const [loadState, setLoadState] = useState<LoadState>('loading')
@@ -268,6 +272,13 @@ function DeckEditor() {
       setSideboard(updated)
       scheduleAutoSave({ sideboard: updated })
     }
+  }
+
+  // ── Log game ─────────────────────────────────────────────────────────────
+
+  async function handleLogGame(gameData: NewGameEntry): Promise<boolean> {
+    const entry = await addGame(gameData)
+    return entry !== null
   }
 
   // ── Export to clipboard ───────────────────────────────────────────────────
@@ -549,6 +560,15 @@ function DeckEditor() {
           className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           data-testid="notes-textarea"
         />
+      </section>
+
+      {/* ── Game Logger ── */}
+      <section className="mb-8" data-testid="game-logger-wrapper">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Game Log</h2>
+        <GameLogger cards={mainboard} onSubmit={handleLogGame} />
+        <div className="mt-4">
+          <GameLogList games={games} />
+        </div>
       </section>
 
       {/* ── CardSearch panel ── */}

@@ -10,6 +10,9 @@ import { useCards } from '../hooks/useCards'
 
 vi.mock('../hooks/useDecks')
 vi.mock('../hooks/useCards')
+vi.mock('../hooks/useGames', () => ({
+  useGames: () => ({ games: [], loading: false, error: null, addGame: vi.fn(), refetch: vi.fn() }),
+}))
 vi.mock('axios', () => ({
   default: {
     get: vi.fn(),
