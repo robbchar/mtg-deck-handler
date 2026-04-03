@@ -194,6 +194,83 @@ describe('useGames — addGame', () => {
   })
 })
 
+// ── removeGame ────────────────────────────────────────────────────────────────
+
+describe('useGames — removeGame', () => {
+  it('returns true and removes the entry from games on success', async () => {
+    const entry2 = { ...MOCK_ENTRY, id: 'game-2', result: 'loss' as const }
+    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY, entry2] })
+    axios.delete.mockResolvedValueOnce({ data: { deleted: true } })
+
+    const { result } = renderHook(() => useGames(DECK_ID))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    let success: boolean = false
+    await act(async () => {
+      success = await result.current.removeGame(MOCK_ENTRY.id)
+    })
+
+    expect(success).toBe(true)
+    expect(result.current.games.find((g) => g.id === MOCK_ENTRY.id)).toBeUndefined()
+    expect(result.current.games).toHaveLength(1)
+  })
+
+  it('calls DELETE /api/decks/:id/games/:gameId', async () => {
+    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    axios.delete.mockResolvedValueOnce({ data: { deleted: true } })
+
+    const { result } = renderHook(() => useGames(DECK_ID))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.removeGame(MOCK_ENTRY.id)
+    })
+
+    expect(axios.delete).toHaveBeenCalledWith(
+      `/api/decks/${DECK_ID}/games/${MOCK_ENTRY.id}`,
+    )
+  })
+
+  it('returns false and sets error on failure', async () => {
+    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    axios.delete.mockRejectedValueOnce({ response: { data: { error: 'Game not found' } } })
+
+    const { result } = renderHook(() => useGames(DECK_ID))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    let success: boolean = true
+    await act(async () => {
+      success = await result.current.removeGame(MOCK_ENTRY.id)
+    })
+
+    expect(success).toBe(false)
+    expect(result.current.error).toBe('Game not found')
+  })
+
+  it('does not modify games list on failure', async () => {
+    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    axios.delete.mockRejectedValueOnce(new Error('Network error'))
+
+    const { result } = renderHook(() => useGames(DECK_ID))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.removeGame(MOCK_ENTRY.id)
+    })
+
+    expect(result.current.games).toHaveLength(1)
+  })
+
+  it('returns false when deckId is undefined', async () => {
+    const { result } = renderHook(() => useGames(undefined))
+    let success: boolean = true
+    await act(async () => {
+      success = await result.current.removeGame('any-id')
+    })
+    expect(success).toBe(false)
+  })
+})
+
 // ── refetch ───────────────────────────────────────────────────────────────────
 
 describe('useGames — refetch', () => {

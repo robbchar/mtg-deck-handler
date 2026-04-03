@@ -7,7 +7,7 @@
  */
 
 const { Router } = require('express');
-const { getGames, addGame } = require('../services/gameService');
+const { getGames, addGame, removeGame } = require('../services/gameService');
 
 const router = Router({ mergeParams: true });
 
@@ -38,6 +38,26 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: err.message });
     }
     console.error('POST /api/decks/:id/games error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/decks/:id/games/:gameId
+ * Removes a single game entry from the deck's log.
+ */
+router.delete('/:gameId', (req, res) => {
+  try {
+    const result = removeGame(req.params.id, req.params.gameId);
+    res.json(result);
+  } catch (err) {
+    if (err.message && (
+      err.message.startsWith('Game log not found') ||
+      err.message.startsWith('Game not found')
+    )) {
+      return res.status(404).json({ error: err.message });
+    }
+    console.error('DELETE /api/decks/:id/games/:gameId error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });

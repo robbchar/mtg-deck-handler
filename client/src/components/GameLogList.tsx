@@ -25,13 +25,14 @@ function relativeTime(isoString: string): string {
 
 interface GameLogListProps {
   games: GameEntry[]
+  onRemove?: (gameId: string) => void
 }
 
 /**
  * GameLogList — chronological list of past game entries (newest first).
  * Each row shows result badge, turn, opponent colors, archetype, timestamp.
  */
-export default function GameLogList({ games }: GameLogListProps) {
+export default function GameLogList({ games, onRemove }: GameLogListProps) {
   if (games.length === 0) {
     return (
       <p className="py-4 text-sm text-gray-400" data-testid="game-log-empty">
@@ -90,9 +91,22 @@ export default function GameLogList({ games }: GameLogListProps) {
           )}
 
           {/* Timestamp */}
-          <span className="ml-auto text-xs text-gray-400" data-testid="game-timestamp">
+          <span className="text-xs text-gray-400" data-testid="game-timestamp">
             {relativeTime(game.logged_at)}
           </span>
+
+          {/* Remove */}
+          {onRemove && (
+            <button
+              type="button"
+              onClick={() => onRemove(game.id)}
+              className="ml-auto text-gray-300 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400 rounded"
+              aria-label="Remove game log entry"
+              data-testid="remove-game-btn"
+            >
+              ✕
+            </button>
+          )}
         </li>
       ))}
     </ul>

@@ -93,4 +93,26 @@ function addGame(deckId, gameData) {
   return entry;
 }
 
-module.exports = { getGames, addGame };
+/**
+ * Removes a single game entry by id from the deck's game log.
+ *
+ * @param {string} deckId
+ * @param {string} gameId
+ * @returns {{ deleted: true }}
+ * @throws {Error} When the log file or the game entry does not exist
+ */
+function removeGame(deckId, gameId) {
+  const log = readLog(deckId);
+
+  if (!log) throw new Error(`Game log not found for deck: ${deckId}`);
+
+  const index = log.games.findIndex((g) => g.id === gameId);
+  if (index === -1) throw new Error(`Game not found: ${gameId}`);
+
+  log.games.splice(index, 1);
+  atomicWrite(gamesPath(deckId), log);
+
+  return { deleted: true };
+}
+
+module.exports = { getGames, addGame, removeGame };

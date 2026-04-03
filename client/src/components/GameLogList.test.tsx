@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import GameLogList from './GameLogList'
 import type { GameEntry } from '../types'
@@ -114,6 +114,28 @@ describe('GameLogList — archetype', () => {
   it('does not render archetype element when null', () => {
     render(<GameLogList games={[makeEntry({ opponent_archetype: null })]} />)
     expect(screen.queryByTestId('game-archetype')).not.toBeInTheDocument()
+  })
+})
+
+// ── remove button ─────────────────────────────────────────────────────────────
+
+describe('GameLogList — remove button', () => {
+  it('renders a remove button on each row when onRemove is provided', () => {
+    render(<GameLogList games={[makeEntry(), makeEntry({ id: 'game-2' })]} onRemove={vi.fn()} />)
+    expect(screen.getAllByTestId('remove-game-btn')).toHaveLength(2)
+  })
+
+  it('does not render remove buttons when onRemove is not provided', () => {
+    render(<GameLogList games={[makeEntry()]} />)
+    expect(screen.queryByTestId('remove-game-btn')).not.toBeInTheDocument()
+  })
+
+  it('calls onRemove with the game id when clicked', () => {
+    const onRemove = vi.fn()
+    const entry = makeEntry({ id: 'game-abc' })
+    render(<GameLogList games={[entry]} onRemove={onRemove} />)
+    fireEvent.click(screen.getByTestId('remove-game-btn'))
+    expect(onRemove).toHaveBeenCalledWith('game-abc')
   })
 })
 

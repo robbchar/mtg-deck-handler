@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-let getGames, addGame;
+let getGames, addGame, removeGame;
 let tempDir;
 let gamesDir;
 
@@ -16,7 +16,7 @@ beforeEach(() => {
   process.env.DATA_DIR = tempDir;
 
   jest.resetModules();
-  ({ getGames, addGame } = require('./gameService'));
+  ({ getGames, addGame, removeGame } = require('./gameService'));
 });
 
 afterEach(() => {
@@ -163,5 +163,53 @@ describe('addGame(deckId, gameData)', () => {
     expect(getGames('deck-b')).toHaveLength(1);
     expect(getGames('deck-a')[0].result).toBe('win');
     expect(getGames('deck-b')[0].result).toBe('loss');
+  });
+});
+
+// ── removeGame ────────────────────────────────────────────────────────────────
+
+describe('removeGame(deckId, gameId)', () => {
+  it('returns { deleted: true }', () => {
+    const entry = addGame(DECK_ID, { result: 'win' });
+    expect(removeGame(DECK_ID, entry.id)).toEqual({ deleted: true });
+  });
+
+  it('removes the entry from the log', () => {
+    const entry = addGame(DECK_ID, { result: 'win' });
+    removeGame(DECK_ID, entry.id);
+    expect(getGames(DECK_ID)).toHaveLength(0);
+  });
+
+  it('removes only the targeted entry when multiple games exist', () => {
+    const a = addGame(DECK_ID, { result: 'win' });
+    const b = addGame(DECK_ID, { result: 'loss' });
+    removeGame(DECK_ID, a.id);
+    const remaining = getGames(DECK_ID);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(b.id);
+  });
+
+  it('throws when no game log exists for the deck', () => {
+    expect(() => removeGame(DECK_ID, 'any-id')).toThrow('Game log not found');
+  });
+
+  it('throws when the game id does not exist in the log', () => {
+    addGame(DECK_ID, { result: 'win' });
+    expect(() => removeGame(DECK_ID, 'nonexistent-id')).toThrow('Game not found');
+  });
+
+  it('persists the deletion to disk', () => {
+    const entry = addGame(DECK_ID, { result: 'win' });
+    removeGame(DECK_ID, entry.id);
+    const logFile = JSON.parse(
+      fs.readFileSync(path.join(gamesDir, `${DECK_ID}.json`), 'utf8'),
+    );
+    expect(logFile.games).toHaveLength(0);
+  });
+
+  it('uses atomic write: no .tmp file remains after deletion', () => {
+    const entry = addGame(DECK_ID, { result: 'win' });
+    removeGame(DECK_ID, entry.id);
+    expect(fs.existsSync(path.join(gamesDir, `${DECK_ID}.json.tmp`))).toBe(false);
   });
 });

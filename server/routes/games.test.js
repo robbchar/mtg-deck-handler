@@ -5,6 +5,7 @@ const request = require('supertest');
 jest.mock('../services/gameService');
 
 const gameService = require('../services/gameService');
+const GAME_ID = 'game-uuid-1';
 const app = require('../index');
 
 const DECK_ID = 'abc-123';
@@ -110,6 +111,48 @@ describe('POST /api/decks/:id/games', () => {
     const res = await request(app)
       .post(`/api/decks/${DECK_ID}/games`)
       .send({ result: 'win' });
+    expect(res.statusCode).toBe(500);
+  });
+});
+
+// ── DELETE /api/decks/:id/games/:gameId ───────────────────────────────────────
+
+describe('DELETE /api/decks/:id/games/:gameId', () => {
+  it('returns 200 with { deleted: true }', async () => {
+    gameService.removeGame.mockReturnValue({ deleted: true });
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/games/${GAME_ID}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ deleted: true });
+  });
+
+  it('calls removeGame with deck id and game id', async () => {
+    gameService.removeGame.mockReturnValue({ deleted: true });
+    await request(app).delete(`/api/decks/${DECK_ID}/games/${GAME_ID}`);
+    expect(gameService.removeGame).toHaveBeenCalledWith(DECK_ID, GAME_ID);
+  });
+
+  it('returns 404 when the game log is not found', async () => {
+    gameService.removeGame.mockImplementation(() => {
+      throw new Error(`Game log not found for deck: ${DECK_ID}`);
+    });
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/games/${GAME_ID}`);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 when the game entry is not found', async () => {
+    gameService.removeGame.mockImplementation(() => {
+      throw new Error(`Game not found: ${GAME_ID}`);
+    });
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/games/${GAME_ID}`);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 500 on unexpected errors', async () => {
+    gameService.removeGame.mockImplementation(() => {
+      throw new Error('disk failure');
+    });
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/games/${GAME_ID}`);
     expect(res.statusCode).toBe(500);
   });
 });

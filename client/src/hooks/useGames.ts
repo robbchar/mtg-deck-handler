@@ -55,6 +55,21 @@ export function useGames(deckId: string | undefined) {
     }
   }, [deckId])
 
+  const removeGame = useCallback(
+    async (gameId: string): Promise<boolean> => {
+      if (!deckId) return false
+      try {
+        await axios.delete(`/api/decks/${deckId}/games/${gameId}`)
+        setGames((prev) => prev.filter((g) => g.id !== gameId))
+        return true
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to remove game'))
+        return false
+      }
+    },
+    [deckId],
+  )
+
   const addGame = useCallback(
     async (gameData: NewGameEntry): Promise<GameEntry | null> => {
       if (!deckId) return null
@@ -74,5 +89,5 @@ export function useGames(deckId: string | undefined) {
     [deckId],
   )
 
-  return { games, loading, error, addGame, refetch: fetchGames }
+  return { games, loading, error, addGame, removeGame, refetch: fetchGames }
 }

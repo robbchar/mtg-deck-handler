@@ -61,7 +61,7 @@ function DeckEditor() {
   const { id } = useParams<{ id: string }>()
   const { getDeck, updateDeck } = useDecks()
   const { addToast } = useToastContext()
-  const { games, addGame } = useGames(id)
+  const { games, addGame, removeGame } = useGames(id)
 
   // ── Loading state ─────────────────────────────────────────────────────────
   const [loadState, setLoadState] = useState<LoadState>('loading')
@@ -461,7 +461,7 @@ function DeckEditor() {
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Game Log</h2>
         <GameLogger cards={mainboard} onSubmit={handleLogGame} />
         <div className="mt-4">
-          <GameLogList games={games} />
+          <GameLogList games={games} onRemove={removeGame} />
         </div>
       </section>
 
