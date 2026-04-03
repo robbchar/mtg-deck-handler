@@ -141,18 +141,16 @@ describe('GameLogger — form fields', () => {
     expect(screen.getByTestId('archetype-select')).toBeInTheDocument()
   })
 
-  it('renders opening hand feel buttons', () => {
-    expect(screen.getByTestId('hand-feel-flood')).toBeInTheDocument()
-    expect(screen.getByTestId('hand-feel-good')).toBeInTheDocument()
-    expect(screen.getByTestId('hand-feel-screw')).toBeInTheDocument()
+  it('renders opening hand feel select', () => {
+    expect(screen.getByTestId('opening-hand-feel-select')).toBeInTheDocument()
   })
 
-  it('toggles opening hand feel — pressing again deselects', () => {
-    const btn = screen.getByTestId('hand-feel-good')
-    fireEvent.click(btn)
-    expect(btn).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(btn)
-    expect(btn).toHaveAttribute('aria-pressed', 'false')
+  it('opening hand feel select has flood, good, and screw options', () => {
+    const select = screen.getByTestId('opening-hand-feel-select') as HTMLSelectElement
+    const values = Array.from(select.options).map((o) => o.value)
+    expect(values).toContain('flood')
+    expect(values).toContain('good')
+    expect(values).toContain('screw')
   })
 
   it('renders card name chips from the deck', () => {
@@ -252,7 +250,7 @@ describe('GameLogger — submission', () => {
     fireEvent.click(screen.getByTestId('color-R'))
     fireEvent.click(screen.getByTestId('color-G'))
     fireEvent.change(screen.getByTestId('archetype-select'), { target: { value: 'aggro' } })
-    fireEvent.click(screen.getByTestId('hand-feel-screw'))
+    fireEvent.change(screen.getByTestId('opening-hand-feel-select'), { target: { value: 'screw' } })
     fireEvent.change(screen.getByTestId('tough-card-input'), { target: { value: 'Embercleave' } })
     fireEvent.change(screen.getByTestId('game-notes-input'), { target: { value: 'rough game' } })
     fireEvent.click(screen.getByTestId('log-game-submit'))

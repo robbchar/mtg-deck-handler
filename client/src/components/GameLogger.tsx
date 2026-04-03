@@ -177,104 +177,108 @@ export default function GameLogger({ cards, onSubmit }: GameLoggerProps) {
             {/* ── Detail fields (progressive disclosure) ── */}
             {result && (
               <div className="space-y-5" data-testid="game-logger-details">
-                {/* Turn Ended */}
-                <div>
-                  <label
-                    htmlFor="turn-ended"
-                    className="mb-1 block text-sm font-medium text-gray-700"
-                  >
-                    Game ended on turn
-                  </label>
-                  <input
-                    id="turn-ended"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={form.turn_ended}
-                    onChange={(e) => setForm((p) => ({ ...p, turn_ended: e.target.value }))}
-                    placeholder="—"
-                    className="w-24 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    data-testid="turn-ended-input"
-                  />
-                </div>
-
-                {/* Opponent Colors */}
-                <div>
-                  <p className="mb-2 text-sm font-medium text-gray-700">Opponent colors</p>
-                  <div className="flex gap-2" role="group" aria-label="Opponent colors">
-                    {COLOR_LABELS.map(({ value, label }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => toggleColor(value)}
-                        aria-pressed={form.opponent_colors.includes(value)}
-                        data-testid={`color-${value}`}
-                        className={`h-9 w-9 rounded-full border-2 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                          form.opponent_colors.includes(value)
-                            ? 'border-indigo-500 bg-indigo-100 text-indigo-700'
-                            : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                {/* Turn / Colors / Archetype / Hand Feel — single row */}
+                <div className="flex flex-wrap items-end gap-4 [&>*]:flex-1">
+                  {/* Turn Ended */}
+                  <div className="flex flex-col items-center">
+                    <label
+                      htmlFor="turn-ended"
+                      className="mb-1 block text-center text-sm font-medium text-gray-700"
+                    >
+                      Game ended on turn
+                    </label>
+                    <input
+                      id="turn-ended"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={form.turn_ended}
+                      onChange={(e) => setForm((p) => ({ ...p, turn_ended: e.target.value }))}
+                      placeholder="—"
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      data-testid="turn-ended-input"
+                    />
                   </div>
-                </div>
 
-                {/* Opponent Archetype */}
-                <div>
-                  <label
-                    htmlFor="opponent-archetype"
-                    className="mb-1 block text-sm font-medium text-gray-700"
-                  >
-                    Opponent archetype
-                  </label>
-                  <select
-                    id="opponent-archetype"
-                    value={form.opponent_archetype}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        opponent_archetype: e.target.value as OpponentArchetype | '',
-                      }))
-                    }
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    data-testid="archetype-select"
-                  >
-                    <option value="">— select —</option>
-                    {ARCHETYPES.map(({ value, label }) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  {/* Opponent Colors */}
+                  <div className="flex flex-col items-center">
+                    <p className="mb-1 text-center text-sm font-medium text-gray-700">Opponent colors</p>
+                    <div className="flex justify-center gap-1.5" role="group" aria-label="Opponent colors">
+                      {COLOR_LABELS.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => toggleColor(value)}
+                          aria-pressed={form.opponent_colors.includes(value)}
+                          data-testid={`color-${value}`}
+                          className={`h-9 w-9 rounded-full border-2 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                            form.opponent_colors.includes(value)
+                              ? 'border-indigo-500 bg-indigo-100 text-indigo-700'
+                              : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                {/* Opening Hand Feel */}
-                <div>
-                  <p className="mb-2 text-sm font-medium text-gray-700">Opening hand feel</p>
-                  <div className="flex gap-2" role="group" aria-label="Opening hand feel">
-                    {HAND_FEELS.map(({ value, label }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() =>
-                          setForm((p) => ({
-                            ...p,
-                            opening_hand_feel: p.opening_hand_feel === value ? '' : value,
-                          }))
-                        }
-                        aria-pressed={form.opening_hand_feel === value}
-                        data-testid={`hand-feel-${value}`}
-                        className={`rounded-lg border px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                          form.opening_hand_feel === value
-                            ? 'border-indigo-500 bg-indigo-100 font-semibold text-indigo-700'
-                            : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  {/* Opponent Archetype */}
+                  <div className="flex flex-col items-center">
+                    <label
+                      htmlFor="opponent-archetype"
+                      className="mb-1 block text-center text-sm font-medium text-gray-700"
+                    >
+                      Opponent archetype
+                    </label>
+                    <select
+                      id="opponent-archetype"
+                      value={form.opponent_archetype}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          opponent_archetype: e.target.value as OpponentArchetype | '',
+                        }))
+                      }
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      data-testid="archetype-select"
+                    >
+                      <option value="">— select —</option>
+                      {ARCHETYPES.map(({ value, label }) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Opening Hand Feel */}
+                  <div className="flex flex-col items-center">
+                    <label
+                      htmlFor="opening-hand-feel"
+                      className="mb-1 block text-center text-sm font-medium text-gray-700"
+                    >
+                      Opening hand feel
+                    </label>
+                    <select
+                      id="opening-hand-feel"
+                      value={form.opening_hand_feel}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          opening_hand_feel: e.target.value as OpeningHandFeel | '',
+                        }))
+                      }
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      data-testid="opening-hand-feel-select"
+                    >
+                      <option value="">— select —</option>
+                      {HAND_FEELS.map(({ value, label }) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
