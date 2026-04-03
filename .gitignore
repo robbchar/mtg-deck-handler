@@ -5,6 +5,8 @@ data/decks/*
 !data/decks/.gitkeep
 data/cache/*
 !data/cache/.gitkeep
+data/games/*
+!data/games/.gitkeep
 
 # Dependencies
 node_modules/
