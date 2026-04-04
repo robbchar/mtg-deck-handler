@@ -88,45 +88,45 @@ describe('GameLogList — last 5 dots', () => {
 // ── trend indicator ───────────────────────────────────────────────────────────
 
 describe('GameLogList — trend indicator', () => {
-  it('does not render trend when fewer than 6 games', () => {
-    const games = Array.from({ length: 5 }, (_, i) =>
-      makeEntry({ id: `g${i}`, result: 'win' }),
-    )
-    render(<GameLogList games={games} />)
-    expect(screen.queryByTestId('game-log-trend')).not.toBeInTheDocument()
+  it('shows trend even with a single game', () => {
+    render(<GameLogList games={[makeEntry({ result: 'win' })]} />)
+    expect(screen.getByTestId('game-log-trend')).toBeInTheDocument()
   })
 
-  it('shows Hot when last 5 win rate is >20% higher than previous 5', () => {
-    // last 5: all wins (100%), prev 5: all losses (0%) → diff = 1.0
-    const games = [
-      ...Array.from({ length: 5 }, (_, i) => makeEntry({ id: `new${i}`, result: 'win' })),
-      ...Array.from({ length: 5 }, (_, i) => makeEntry({ id: `old${i}`, result: 'loss' })),
-    ]
+  it('shows Hot when more than half of last 10 are wins', () => {
+    // 8W/0L → 100% > 50%
+    const games = Array.from({ length: 8 }, (_, i) =>
+      makeEntry({ id: `g${i}`, result: 'win' }),
+    )
     render(<GameLogList games={games} />)
     expect(screen.getByTestId('game-log-trend')).toHaveTextContent('Hot')
   })
 
-  it('shows Cold when last 5 win rate is >20% lower than previous 5', () => {
-    // last 5: all losses (0%), prev 5: all wins (100%) → diff = -1.0
-    const games = [
-      ...Array.from({ length: 5 }, (_, i) => makeEntry({ id: `new${i}`, result: 'loss' })),
-      ...Array.from({ length: 5 }, (_, i) => makeEntry({ id: `old${i}`, result: 'win' })),
-    ]
+  it('shows Cold when fewer than half of last 10 are wins', () => {
+    // 2W/8L → 20% < 50%
+    const games = Array.from({ length: 10 }, (_, i) =>
+      makeEntry({ id: `g${i}`, result: i < 2 ? 'win' : 'loss' }),
+    )
     render(<GameLogList games={games} />)
     expect(screen.getByTestId('game-log-trend')).toHaveTextContent('Cold')
   })
 
-  it('shows Even when win rate difference is ≤20%', () => {
-    // last 5: 3 wins (60%), prev 5: 3 wins (60%) → diff = 0
-    const games = [
-      ...Array.from({ length: 5 }, (_, i) =>
-        makeEntry({ id: `new${i}`, result: i < 3 ? 'win' : 'loss' }),
-      ),
-      ...Array.from({ length: 5 }, (_, i) =>
-        makeEntry({ id: `old${i}`, result: i < 3 ? 'win' : 'loss' }),
-      ),
-    ]
+  it('shows Even when exactly half are wins', () => {
+    // 5W/5L → 50%
+    const games = Array.from({ length: 10 }, (_, i) =>
+      makeEntry({ id: `g${i}`, result: i < 5 ? 'win' : 'loss' }),
+    )
     render(<GameLogList games={games} />)
     expect(screen.getByTestId('game-log-trend')).toHaveTextContent('Even')
+  })
+
+  it('uses only the last 10 games when more than 10 exist', () => {
+    // 10 old losses + 10 recent wins → window is all wins → Hot
+    const games = [
+      ...Array.from({ length: 10 }, (_, i) => makeEntry({ id: `new${i}`, result: 'win' })),
+      ...Array.from({ length: 10 }, (_, i) => makeEntry({ id: `old${i}`, result: 'loss' })),
+    ]
+    render(<GameLogList games={games} />)
+    expect(screen.getByTestId('game-log-trend')).toHaveTextContent('Hot')
   })
 })
