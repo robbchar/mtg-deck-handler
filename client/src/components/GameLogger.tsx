@@ -17,6 +17,34 @@ const COLOR_LABELS: { value: OpponentColor; label: string }[] = [
   { value: 'G', label: 'G' },
 ]
 
+const COLOR_STYLES: Record<OpponentColor, { base: string; selected: string; hover: string }> = {
+  W: {
+    base:     'border-yellow-200 bg-yellow-50   text-yellow-700',
+    selected: 'border-yellow-400 bg-yellow-200  text-yellow-900',
+    hover:    'hover:border-yellow-300 hover:bg-yellow-100',
+  },
+  U: {
+    base:     'border-blue-200   bg-blue-50     text-blue-700',
+    selected: 'border-blue-500   bg-blue-200    text-blue-900',
+    hover:    'hover:border-blue-300   hover:bg-blue-100',
+  },
+  B: {
+    base:     'border-gray-500   bg-gray-800    text-gray-200',
+    selected: 'border-gray-300   bg-gray-900    text-white',
+    hover:    'hover:border-gray-400   hover:bg-gray-700',
+  },
+  R: {
+    base:     'border-red-200    bg-red-50      text-red-700',
+    selected: 'border-red-500    bg-red-200     text-red-900',
+    hover:    'hover:border-red-300    hover:bg-red-100',
+  },
+  G: {
+    base:     'border-green-200  bg-green-50    text-green-700',
+    selected: 'border-green-500  bg-green-200   text-green-900',
+    hover:    'hover:border-green-300  hover:bg-green-100',
+  },
+}
+
 const ARCHETYPES: { value: OpponentArchetype; label: string }[] = [
   { value: 'aggro', label: 'Aggro' },
   { value: 'midrange', label: 'Midrange' },
@@ -213,8 +241,8 @@ export default function GameLogger({ cards, onSubmit }: GameLoggerProps) {
                           data-testid={`color-${value}`}
                           className={`h-9 w-9 rounded-full border-2 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                             form.opponent_colors.includes(value)
-                              ? 'border-indigo-500 bg-indigo-100 text-indigo-700'
-                              : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400'
+                              ? COLOR_STYLES[value].selected
+                              : `${COLOR_STYLES[value].base} ${COLOR_STYLES[value].hover}`
                           }`}
                         >
                           {label}
