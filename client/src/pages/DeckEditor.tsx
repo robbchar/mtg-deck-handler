@@ -61,7 +61,7 @@ function DeckEditor() {
   const { id } = useParams<{ id: string }>()
   const { getDeck, updateDeck } = useDecks()
   const { addToast } = useToastContext()
-  const { games, addGame, removeGame } = useGames(id)
+  const { games, addGame } = useGames(id)
 
   // ── Loading state ─────────────────────────────────────────────────────────
   const [loadState, setLoadState] = useState<LoadState>('loading')
@@ -456,13 +456,13 @@ function DeckEditor() {
         </div>
       </header>
 
-      {/* ── Game Logger ── */}
+      {/* ── Game Log ── */}
       <section className="mb-8" data-testid="game-logger-wrapper">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Game Log</h2>
-        <GameLogger cards={mainboard} onSubmit={handleLogGame} />
-        <div className="mt-4">
-          <GameLogList games={games} onRemove={removeGame} />
+        <div className="mb-4">
+          <GameLogList games={games} />
         </div>
+        <GameLogger cards={mainboard} onSubmit={handleLogGame} />
       </section>
 
       {/* ── Mainboard ── */}
