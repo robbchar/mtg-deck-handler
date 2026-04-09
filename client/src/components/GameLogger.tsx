@@ -3,6 +3,7 @@ import { useToastContext } from '../context/ToastContext'
 import type {
   CardEntry,
   GameResult,
+  MtgaRank,
   NewGameEntry,
   OpponentArchetype,
   OpponentColor,
@@ -59,6 +60,15 @@ const HAND_FEELS: { value: OpeningHandFeel; label: string }[] = [
   { value: 'screw', label: 'Mana Screw' },
 ]
 
+const MTGA_RANKS: { value: MtgaRank; label: string }[] = [
+  { value: 'bronze', label: 'Bronze' },
+  { value: 'silver', label: 'Silver' },
+  { value: 'gold', label: 'Gold' },
+  { value: 'platinum', label: 'Platinum' },
+  { value: 'diamond', label: 'Diamond' },
+  { value: 'mythic', label: 'Mythic' },
+]
+
 interface GameLoggerProps {
   cards: CardEntry[]
   onSubmit: (gameData: NewGameEntry) => Promise<boolean>
@@ -70,6 +80,7 @@ function buildEmptyForm() {
     opponent_colors: [] as OpponentColor[],
     opponent_archetype: '' as OpponentArchetype | '',
     opening_hand_feel: '' as OpeningHandFeel | '',
+    mtga_rank: '' as MtgaRank | '',
     cards_in_hand: [] as string[],
     tough_opponent_card: '',
     notes: '',
@@ -132,6 +143,7 @@ export default function GameLogger({ cards, onSubmit }: GameLoggerProps) {
       opponent_colors: form.opponent_colors,
       opponent_archetype: form.opponent_archetype || null,
       opening_hand_feel: form.opening_hand_feel || null,
+      mtga_rank: form.mtga_rank || null,
       cards_in_hand: form.cards_in_hand,
       tough_opponent_card: form.tough_opponent_card,
       notes: form.notes,
@@ -302,6 +314,35 @@ export default function GameLogger({ cards, onSubmit }: GameLoggerProps) {
                     >
                       <option value="">— select —</option>
                       {HAND_FEELS.map(({ value, label }) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* MTGA Rank */}
+                  <div className="flex flex-col items-center">
+                    <label
+                      htmlFor="mtga-rank"
+                      className="mb-1 block text-center text-sm font-medium text-gray-700"
+                    >
+                      MTGA rank
+                    </label>
+                    <select
+                      id="mtga-rank"
+                      value={form.mtga_rank}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          mtga_rank: e.target.value as MtgaRank | '',
+                        }))
+                      }
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      data-testid="mtga-rank-select"
+                    >
+                      <option value="">— select —</option>
+                      {MTGA_RANKS.map(({ value, label }) => (
                         <option key={value} value={value}>
                           {label}
                         </option>

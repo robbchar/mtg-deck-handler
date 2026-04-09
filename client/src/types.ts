@@ -67,6 +67,7 @@ export type GameResult = 'win' | 'loss'
 export type OpponentColor = 'W' | 'U' | 'B' | 'R' | 'G'
 export type OpponentArchetype = 'aggro' | 'midrange' | 'control' | 'combo' | 'unknown'
 export type OpeningHandFeel = 'flood' | 'good' | 'screw'
+export type MtgaRank = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'mythic'
 
 export interface GameEntry {
   id: string
@@ -76,6 +77,7 @@ export interface GameEntry {
   opponent_colors: OpponentColor[]
   opponent_archetype: OpponentArchetype | null
   opening_hand_feel: OpeningHandFeel | null
+  mtga_rank: MtgaRank | null
   cards_in_hand: string[]
   tough_opponent_card: string
   notes: string
@@ -87,6 +89,7 @@ export interface NewGameEntry {
   opponent_colors?: OpponentColor[]
   opponent_archetype?: OpponentArchetype | null
   opening_hand_feel?: OpeningHandFeel | null
+  mtga_rank?: MtgaRank | null
   cards_in_hand?: string[]
   tough_opponent_card?: string
   notes?: string

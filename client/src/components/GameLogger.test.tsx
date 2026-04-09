@@ -164,6 +164,16 @@ describe('GameLogger — form fields', () => {
     expect(screen.getByTestId('tough-card-input')).toBeInTheDocument()
   })
 
+  it('renders mtga rank select', () => {
+    expect(screen.getByTestId('mtga-rank-select')).toBeInTheDocument()
+  })
+
+  it('mtga rank select has all six tier options', () => {
+    const select = screen.getByTestId('mtga-rank-select') as HTMLSelectElement
+    const values = Array.from(select.options).map((o) => o.value)
+    expect(values).toEqual(expect.arrayContaining(['bronze', 'silver', 'gold', 'platinum', 'diamond', 'mythic']))
+  })
+
   it('renders notes textarea', () => {
     expect(screen.getByTestId('game-notes-input')).toBeInTheDocument()
   })
@@ -251,6 +261,7 @@ describe('GameLogger — submission', () => {
     fireEvent.click(screen.getByTestId('color-G'))
     fireEvent.change(screen.getByTestId('archetype-select'), { target: { value: 'aggro' } })
     fireEvent.change(screen.getByTestId('opening-hand-feel-select'), { target: { value: 'screw' } })
+    fireEvent.change(screen.getByTestId('mtga-rank-select'), { target: { value: 'gold' } })
     fireEvent.change(screen.getByTestId('tough-card-input'), { target: { value: 'Embercleave' } })
     fireEvent.change(screen.getByTestId('game-notes-input'), { target: { value: 'rough game' } })
     fireEvent.click(screen.getByTestId('log-game-submit'))
@@ -262,6 +273,7 @@ describe('GameLogger — submission', () => {
     expect(arg.opponent_colors).toEqual(['R', 'G'])
     expect(arg.opponent_archetype).toBe('aggro')
     expect(arg.opening_hand_feel).toBe('screw')
+    expect(arg.mtga_rank).toBe('gold')
     expect(arg.tough_opponent_card).toBe('Embercleave')
     expect(arg.notes).toBe('rough game')
   })
@@ -313,6 +325,7 @@ describe('GameLogger — submission', () => {
     expect(arg.turn_ended).toBeNull()
     expect(arg.opponent_archetype).toBeNull()
     expect(arg.opening_hand_feel).toBeNull()
+    expect(arg.mtga_rank).toBeNull()
   })
 })
 
