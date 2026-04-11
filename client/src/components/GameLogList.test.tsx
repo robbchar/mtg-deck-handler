@@ -12,6 +12,7 @@ function makeEntry(overrides: Partial<GameEntry> = {}): GameEntry {
     opponent_colors: [],
     opponent_archetype: null,
     opening_hand_feel: null,
+    mtga_rank: null,
     cards_in_hand: [],
     tough_opponent_card: '',
     notes: '',

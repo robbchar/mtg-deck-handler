@@ -17,10 +17,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const { toasts, addToast, removeToast } = useToast()
 
   return (
-    <ToastContext.Provider value={{ addToast }}>
+    <ToastContext value={{ addToast }}>
       {children}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </ToastContext.Provider>
+    </ToastContext>
   )
 }
 

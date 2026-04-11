@@ -1,3 +1,4 @@
+import React from 'react'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import axios from 'axios'
@@ -12,6 +13,13 @@ vi.mock('axios', () => ({
     delete: vi.fn(),
   },
 }))
+
+const mockedAxios = {
+  get: vi.mocked(axios.get),
+  post: vi.mocked(axios.post),
+  put: vi.mocked(axios.put),
+  delete: vi.mocked(axios.delete),
+}
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -38,7 +46,7 @@ const DECK_B = {
 }
 
 /** Wraps the hook in a DeckProvider so context is available. */
-function wrapper({ children }) {
+function wrapper({ children }: { children: React.ReactNode }) {
   return <DeckProvider>{children}</DeckProvider>
 }
 
@@ -50,7 +58,7 @@ beforeEach(() => {
 
 describe('useDecks — initial state', () => {
   it('exposes decks, loading, error, and all CRUD functions', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
     const { result } = renderHook(() => useDecks(), { wrapper })
 
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -65,8 +73,8 @@ describe('useDecks — initial state', () => {
   })
 
   it('starts with loading=true while the mount fetch is pending', () => {
-    let resolve
-    axios.get.mockReturnValueOnce(new Promise(r => { resolve = r }))
+    let resolve: (value: unknown) => void
+    mockedAxios.get.mockReturnValueOnce(new Promise(r => { resolve = r }))
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     expect(result.current.loading).toBe(true)
@@ -86,7 +94,7 @@ describe('useDecks — initial state', () => {
 
 describe('useDecks — mount fetch', () => {
   it('calls GET /api/decks on mount', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
 
     renderHook(() => useDecks(), { wrapper })
 
@@ -94,7 +102,7 @@ describe('useDecks — mount fetch', () => {
   })
 
   it('populates decks after a successful fetch', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A, DECK_B] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A, DECK_B] })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
 
@@ -104,7 +112,7 @@ describe('useDecks — mount fetch', () => {
   })
 
   it('sets loading=false after a successful fetch', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
 
@@ -112,7 +120,7 @@ describe('useDecks — mount fetch', () => {
   })
 
   it('sets loading=false and error state on fetch failure', async () => {
-    axios.get.mockRejectedValueOnce(new Error('Network error'))
+    mockedAxios.get.mockRejectedValueOnce(new Error('Network error'))
 
     const { result } = renderHook(() => useDecks(), { wrapper })
 
@@ -121,7 +129,7 @@ describe('useDecks — mount fetch', () => {
   })
 
   it('prefers the server error message when available', async () => {
-    axios.get.mockRejectedValueOnce({
+    mockedAxios.get.mockRejectedValueOnce({
       response: { data: { error: 'Disk read failure' } },
     })
 
@@ -135,12 +143,12 @@ describe('useDecks — mount fetch', () => {
 
 describe('useDecks — createDeck', () => {
   it('optimistically adds a deck to local state before the POST resolves', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    let resolvePost
-    axios.post.mockReturnValueOnce(new Promise(r => { resolvePost = r }))
+    let resolvePost: (value: unknown) => void
+    mockedAxios.post.mockReturnValueOnce(new Promise(r => { resolvePost = r }))
 
     act(() => {
       result.current.createDeck({ name: 'Optimistic Deck' })
@@ -152,8 +160,8 @@ describe('useDecks — createDeck', () => {
   })
 
   it('replaces the optimistic entry with the server deck on success', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockResolvedValueOnce({ data: DECK_A })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockResolvedValueOnce({ data: DECK_A })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -169,8 +177,8 @@ describe('useDecks — createDeck', () => {
   })
 
   it('returns the created deck on success', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockResolvedValueOnce({ data: DECK_A })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockResolvedValueOnce({ data: DECK_A })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -184,8 +192,8 @@ describe('useDecks — createDeck', () => {
   })
 
   it('rolls back the optimistic update on server failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockRejectedValueOnce(new Error('Server error'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockRejectedValueOnce(new Error('Server error'))
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -198,8 +206,8 @@ describe('useDecks — createDeck', () => {
   })
 
   it('sets error state when the server call fails', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockRejectedValueOnce({
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockRejectedValueOnce({
       response: { data: { error: 'name is required' } },
     })
 
@@ -214,8 +222,8 @@ describe('useDecks — createDeck', () => {
   })
 
   it('returns null on server failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockRejectedValueOnce(new Error('fail'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockRejectedValueOnce(new Error('fail'))
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -229,8 +237,8 @@ describe('useDecks — createDeck', () => {
   })
 
   it('calls POST /api/decks with the deck data', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockResolvedValueOnce({ data: DECK_A })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockResolvedValueOnce({ data: DECK_A })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -246,8 +254,8 @@ describe('useDecks — createDeck', () => {
   })
 
   it('preserves existing decks after a successful create (no stale closure wipe)', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.post.mockResolvedValueOnce({ data: DECK_B })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.post.mockResolvedValueOnce({ data: DECK_B })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
@@ -267,12 +275,12 @@ describe('useDecks — createDeck', () => {
 
 describe('useDecks — updateDeck', () => {
   it('optimistically updates the deck in local state', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
 
-    let resolvePut
-    axios.put.mockReturnValueOnce(new Promise(r => { resolvePut = r }))
+    let resolvePut: (value: unknown) => void
+    mockedAxios.put.mockReturnValueOnce(new Promise(r => { resolvePut = r }))
 
     act(() => {
       result.current.updateDeck('deck-aaa', { notes: 'Optimistic notes' })
@@ -291,8 +299,8 @@ describe('useDecks — updateDeck', () => {
       notes: 'Server notes',
       updated_at: '2024-06-01T00:00:00.000Z',
     }
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.put.mockResolvedValueOnce({ data: serverDeck })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.put.mockResolvedValueOnce({ data: serverDeck })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
@@ -305,8 +313,8 @@ describe('useDecks — updateDeck', () => {
   })
 
   it('rolls back to the previous deck on server failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.put.mockRejectedValueOnce(new Error('fail'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.put.mockRejectedValueOnce(new Error('fail'))
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
@@ -319,8 +327,8 @@ describe('useDecks — updateDeck', () => {
   })
 
   it('sets error state on server failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.put.mockRejectedValueOnce({
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.put.mockRejectedValueOnce({
       response: { data: { error: 'Deck not found' } },
     })
 
@@ -335,7 +343,7 @@ describe('useDecks — updateDeck', () => {
   })
 
   it('returns null when the deck id is not in local state', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
 
@@ -349,8 +357,8 @@ describe('useDecks — updateDeck', () => {
   })
 
   it('calls PUT /api/decks/:id with the patch data', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.put.mockResolvedValueOnce({ data: DECK_A })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.put.mockResolvedValueOnce({ data: DECK_A })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
@@ -367,12 +375,12 @@ describe('useDecks — updateDeck', () => {
 
 describe('useDecks — deleteDeck', () => {
   it('optimistically removes the deck from local state', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A, DECK_B] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A, DECK_B] })
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(2))
 
-    let resolveDelete
-    axios.delete.mockReturnValueOnce(new Promise(r => { resolveDelete = r }))
+    let resolveDelete: (value: unknown) => void
+    mockedAxios.delete.mockReturnValueOnce(new Promise(r => { resolveDelete = r }))
 
     act(() => { result.current.deleteDeck('deck-aaa') })
 
@@ -383,8 +391,8 @@ describe('useDecks — deleteDeck', () => {
   })
 
   it('returns true on success', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.delete.mockResolvedValueOnce({ data: { deleted: true } })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.delete.mockResolvedValueOnce({ data: { deleted: true } })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
@@ -398,8 +406,8 @@ describe('useDecks — deleteDeck', () => {
   })
 
   it('rolls back the optimistic remove on server failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A, DECK_B] })
-    axios.delete.mockRejectedValueOnce(new Error('fail'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A, DECK_B] })
+    mockedAxios.delete.mockRejectedValueOnce(new Error('fail'))
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(2))
@@ -412,8 +420,8 @@ describe('useDecks — deleteDeck', () => {
   })
 
   it('sets error state on server failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.delete.mockRejectedValueOnce({
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.delete.mockRejectedValueOnce({
       response: { data: { error: 'Deck not found' } },
     })
 
@@ -428,8 +436,8 @@ describe('useDecks — deleteDeck', () => {
   })
 
   it('returns false on server failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.delete.mockRejectedValueOnce(new Error('fail'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.delete.mockRejectedValueOnce(new Error('fail'))
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
@@ -443,7 +451,7 @@ describe('useDecks — deleteDeck', () => {
   })
 
   it('returns false for an id not in local state without calling the API', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
 
@@ -457,8 +465,8 @@ describe('useDecks — deleteDeck', () => {
   })
 
   it('calls DELETE /api/decks/:id', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] })
-    axios.delete.mockResolvedValueOnce({ data: { deleted: true } })
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] })
+    mockedAxios.delete.mockResolvedValueOnce({ data: { deleted: true } })
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
@@ -475,8 +483,8 @@ describe('useDecks — deleteDeck', () => {
 
 describe('useDecks — getDeck', () => {
   it('always fetches from the API even when the deck is in list cache', async () => {
-    axios.get.mockResolvedValueOnce({ data: [DECK_A] }) // mount
-    axios.get.mockResolvedValueOnce({ data: DECK_A })   // getDeck fetch
+    mockedAxios.get.mockResolvedValueOnce({ data: [DECK_A] }) // mount
+    mockedAxios.get.mockResolvedValueOnce({ data: DECK_A })   // getDeck fetch
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.decks).toHaveLength(1))
 
@@ -492,8 +500,8 @@ describe('useDecks — getDeck', () => {
   })
 
   it('fetches from the API when the deck is not in local state', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] }) // mount
-    axios.get.mockResolvedValueOnce({ data: DECK_A }) // getDeck fetch
+    mockedAxios.get.mockResolvedValueOnce({ data: [] }) // mount
+    mockedAxios.get.mockResolvedValueOnce({ data: DECK_A }) // getDeck fetch
 
     const { result } = renderHook(() => useDecks(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -508,8 +516,8 @@ describe('useDecks — getDeck', () => {
   })
 
   it('returns null and sets error on API failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.get.mockRejectedValueOnce({
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockRejectedValueOnce({
       response: { data: { error: 'Deck not found: deck-zzz' } },
     })
 

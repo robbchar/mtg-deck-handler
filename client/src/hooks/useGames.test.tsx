@@ -13,6 +13,13 @@ vi.mock('axios', () => ({
   },
 }))
 
+const mockedAxios = {
+  get: vi.mocked(axios.get),
+  post: vi.mocked(axios.post),
+  put: vi.mocked(axios.put),
+  delete: vi.mocked(axios.delete),
+}
+
 const DECK_ID = 'deck-abc-123'
 
 const MOCK_ENTRY: GameEntry = {
@@ -26,6 +33,7 @@ const MOCK_ENTRY: GameEntry = {
   cards_in_hand: ['Impact Tremors'],
   tough_opponent_card: '',
   notes: '',
+  mtga_rank: null,
 }
 
 beforeEach(() => {
@@ -36,25 +44,25 @@ beforeEach(() => {
 
 describe('useGames — initial state', () => {
   it('starts with an empty games array before fetch completes', () => {
-    axios.get.mockReturnValueOnce(new Promise(() => {})) // never resolves
+    mockedAxios.get.mockReturnValueOnce(new Promise(() => {})) // never resolves
     const { result } = renderHook(() => useGames(DECK_ID))
     expect(result.current.games).toEqual([])
   })
 
   it('starts with loading=true while fetch is in-flight', () => {
-    axios.get.mockReturnValueOnce(new Promise(() => {}))
+    mockedAxios.get.mockReturnValueOnce(new Promise(() => {}))
     const { result } = renderHook(() => useGames(DECK_ID))
     expect(result.current.loading).toBe(true)
   })
 
   it('starts with error=null', () => {
-    axios.get.mockReturnValueOnce(new Promise(() => {}))
+    mockedAxios.get.mockReturnValueOnce(new Promise(() => {}))
     const { result } = renderHook(() => useGames(DECK_ID))
     expect(result.current.error).toBeNull()
   })
 
   it('exposes games, loading, error, addGame, and refetch', () => {
-    axios.get.mockReturnValueOnce(new Promise(() => {}))
+    mockedAxios.get.mockReturnValueOnce(new Promise(() => {}))
     const { result } = renderHook(() => useGames(DECK_ID))
     expect(Array.isArray(result.current.games)).toBe(true)
     expect(typeof result.current.loading).toBe('boolean')
@@ -72,32 +80,32 @@ describe('useGames — initial state', () => {
 
 describe('useGames — fetch on mount', () => {
   it('calls GET /api/decks/:id/games with the deck id', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
     renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(axios.get).toHaveBeenCalledWith(`/api/decks/${DECK_ID}/games`))
   })
 
   it('populates games array after successful fetch', async () => {
-    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.games).toEqual([MOCK_ENTRY])
   })
 
   it('sets loading=false after successful fetch', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
   })
 
   it('sets error on fetch failure', async () => {
-    axios.get.mockRejectedValueOnce({ response: { data: { error: 'disk failure' } } })
+    mockedAxios.get.mockRejectedValueOnce({ response: { data: { error: 'disk failure' } } })
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.error).toBe('disk failure'))
   })
 
   it('sets loading=false after a failed fetch', async () => {
-    axios.get.mockRejectedValueOnce(new Error('Network Error'))
+    mockedAxios.get.mockRejectedValueOnce(new Error('Network Error'))
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
   })
@@ -107,8 +115,8 @@ describe('useGames — fetch on mount', () => {
 
 describe('useGames — addGame', () => {
   it('returns the created entry on success', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockResolvedValueOnce({ data: MOCK_ENTRY })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockResolvedValueOnce({ data: MOCK_ENTRY })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -123,8 +131,8 @@ describe('useGames — addGame', () => {
 
   it('prepends the new entry to games (newest first)', async () => {
     const older: GameEntry = { ...MOCK_ENTRY, id: 'older', result: 'loss' }
-    axios.get.mockResolvedValueOnce({ data: [older] })
-    axios.post.mockResolvedValueOnce({ data: MOCK_ENTRY })
+    mockedAxios.get.mockResolvedValueOnce({ data: [older] })
+    mockedAxios.post.mockResolvedValueOnce({ data: MOCK_ENTRY })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -138,8 +146,8 @@ describe('useGames — addGame', () => {
   })
 
   it('calls POST /api/decks/:id/games with the game data', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockResolvedValueOnce({ data: MOCK_ENTRY })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockResolvedValueOnce({ data: MOCK_ENTRY })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -155,8 +163,8 @@ describe('useGames — addGame', () => {
   })
 
   it('returns null and sets error on failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockRejectedValueOnce({ response: { data: { error: 'result is required' } } })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockRejectedValueOnce({ response: { data: { error: 'result is required' } } })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -171,8 +179,8 @@ describe('useGames — addGame', () => {
   })
 
   it('does not add to games list on failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.post.mockRejectedValueOnce(new Error('Server error'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.post.mockRejectedValueOnce(new Error('Server error'))
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -199,8 +207,8 @@ describe('useGames — addGame', () => {
 describe('useGames — removeGame', () => {
   it('returns true and removes the entry from games on success', async () => {
     const entry2 = { ...MOCK_ENTRY, id: 'game-2', result: 'loss' as const }
-    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY, entry2] })
-    axios.delete.mockResolvedValueOnce({ data: { deleted: true } })
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY, entry2] })
+    mockedAxios.delete.mockResolvedValueOnce({ data: { deleted: true } })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -216,8 +224,8 @@ describe('useGames — removeGame', () => {
   })
 
   it('calls DELETE /api/decks/:id/games/:gameId', async () => {
-    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
-    axios.delete.mockResolvedValueOnce({ data: { deleted: true } })
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    mockedAxios.delete.mockResolvedValueOnce({ data: { deleted: true } })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -232,8 +240,8 @@ describe('useGames — removeGame', () => {
   })
 
   it('returns false and sets error on failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
-    axios.delete.mockRejectedValueOnce({ response: { data: { error: 'Game not found' } } })
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    mockedAxios.delete.mockRejectedValueOnce({ response: { data: { error: 'Game not found' } } })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -248,8 +256,8 @@ describe('useGames — removeGame', () => {
   })
 
   it('does not modify games list on failure', async () => {
-    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
-    axios.delete.mockRejectedValueOnce(new Error('Network error'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    mockedAxios.delete.mockRejectedValueOnce(new Error('Network error'))
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -275,7 +283,7 @@ describe('useGames — removeGame', () => {
 
 describe('useGames — refetch', () => {
   it('re-fetches the game list when called', async () => {
-    axios.get.mockResolvedValue({ data: [] })
+    mockedAxios.get.mockResolvedValue({ data: [] })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -288,8 +296,8 @@ describe('useGames — refetch', () => {
   })
 
   it('updates games after refetch', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
-    axios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_ENTRY] })
 
     const { result } = renderHook(() => useGames(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))

@@ -92,8 +92,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(deckReducer, INITIAL_STATE)
 
   return (
-    <DeckContext.Provider value={{ state, dispatch }}>
+    <DeckContext value={{ state, dispatch }}>
       {children}
-    </DeckContext.Provider>
+    </DeckContext>
   )
 }

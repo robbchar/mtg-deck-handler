@@ -71,7 +71,7 @@ describe('DeckCard — rendering', () => {
 
   it('displays 0 cards when card_count is missing', () => {
     const { card_count: _omit, ...deckWithoutCount } = DECK
-    renderCard(deckWithoutCount)
+    renderCard(deckWithoutCount as typeof DECK)
     expect(screen.getByTestId('card-count')).toHaveTextContent('0 cards')
   })
 
@@ -81,7 +81,7 @@ describe('DeckCard — rendering', () => {
   })
 
   it('displays "—" for updated_at when the date is missing', () => {
-    renderCard({ ...DECK, updated_at: null })
+    renderCard({ ...DECK, updated_at: null as unknown as string })
     expect(screen.getByTestId('updated-at')).toHaveTextContent('—')
   })
 

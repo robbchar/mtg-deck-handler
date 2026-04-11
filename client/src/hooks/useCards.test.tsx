@@ -12,6 +12,13 @@ vi.mock('axios', () => ({
   },
 }))
 
+const mockedAxios = {
+  get: vi.mocked(axios.get),
+  post: vi.mocked(axios.post),
+  put: vi.mocked(axios.put),
+  delete: vi.mocked(axios.delete),
+}
+
 const MOCK_CARD = {
   id: 'scryfall-abc-001',
   name: 'Lightning Bolt',
@@ -58,7 +65,7 @@ describe('useCards — initial state', () => {
 
 describe('useCards — searchCards', () => {
   it('returns an array of cards from the API', async () => {
-    axios.get.mockResolvedValueOnce({ data: [MOCK_CARD, MOCK_CARD_2] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_CARD, MOCK_CARD_2] })
 
     const { result } = renderHook(() => useCards())
     let cards
@@ -70,7 +77,7 @@ describe('useCards — searchCards', () => {
   })
 
   it('calls GET /api/cards/search with q param', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
 
     const { result } = renderHook(() => useCards())
     await act(async () => {
@@ -83,7 +90,7 @@ describe('useCards — searchCards', () => {
   })
 
   it('trims the query before sending', async () => {
-    axios.get.mockResolvedValueOnce({ data: [] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })
 
     const { result } = renderHook(() => useCards())
     await act(async () => {
@@ -96,8 +103,8 @@ describe('useCards — searchCards', () => {
   })
 
   it('sets searching=true while the request is in-flight', async () => {
-    let resolve
-    axios.get.mockReturnValueOnce(new Promise(r => { resolve = r }))
+    let resolve: (value: unknown) => void
+    mockedAxios.get.mockReturnValueOnce(new Promise(r => { resolve = r }))
 
     const { result } = renderHook(() => useCards())
 
@@ -109,7 +116,7 @@ describe('useCards — searchCards', () => {
   })
 
   it('resets searching=false after the request completes', async () => {
-    axios.get.mockResolvedValueOnce({ data: [MOCK_CARD] })
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_CARD] })
 
     const { result } = renderHook(() => useCards())
     await act(async () => {
@@ -120,7 +127,7 @@ describe('useCards — searchCards', () => {
   })
 
   it('resets searching=false even when the request errors', async () => {
-    axios.get.mockRejectedValueOnce(new Error('Network Error'))
+    mockedAxios.get.mockRejectedValueOnce(new Error('Network Error'))
 
     const { result } = renderHook(() => useCards())
     await act(async () => {
@@ -131,7 +138,7 @@ describe('useCards — searchCards', () => {
   })
 
   it('returns empty array on API error without throwing', async () => {
-    axios.get.mockRejectedValueOnce(new Error('Server error'))
+    mockedAxios.get.mockRejectedValueOnce(new Error('Server error'))
 
     const { result } = renderHook(() => useCards())
     let cards
@@ -143,7 +150,7 @@ describe('useCards — searchCards', () => {
   })
 
   it('sets error state on API failure', async () => {
-    axios.get.mockRejectedValueOnce({
+    mockedAxios.get.mockRejectedValueOnce({
       response: { data: { error: 'Rate limited' } },
     })
 
@@ -156,8 +163,8 @@ describe('useCards — searchCards', () => {
   })
 
   it('clears error state before each new search', async () => {
-    axios.get.mockRejectedValueOnce(new Error('fail'))
-    axios.get.mockResolvedValueOnce({ data: [MOCK_CARD] })
+    mockedAxios.get.mockRejectedValueOnce(new Error('fail'))
+    mockedAxios.get.mockResolvedValueOnce({ data: [MOCK_CARD] })
 
     const { result } = renderHook(() => useCards())
     await act(async () => { await result.current.searchCards('first') })
@@ -205,7 +212,7 @@ describe('useCards — searchCards', () => {
 
 describe('useCards — getCard', () => {
   it('returns the card object on success', async () => {
-    axios.get.mockResolvedValueOnce({ data: MOCK_CARD })
+    mockedAxios.get.mockResolvedValueOnce({ data: MOCK_CARD })
 
     const { result } = renderHook(() => useCards())
     let card
@@ -217,7 +224,7 @@ describe('useCards — getCard', () => {
   })
 
   it('calls GET /api/cards/:scryfallId', async () => {
-    axios.get.mockResolvedValueOnce({ data: MOCK_CARD })
+    mockedAxios.get.mockResolvedValueOnce({ data: MOCK_CARD })
 
     const { result } = renderHook(() => useCards())
     await act(async () => {
@@ -228,7 +235,7 @@ describe('useCards — getCard', () => {
   })
 
   it('returns null on 404 without throwing', async () => {
-    axios.get.mockRejectedValueOnce({
+    mockedAxios.get.mockRejectedValueOnce({
       response: { status: 404, data: { error: 'Card not found' } },
     })
 
@@ -242,7 +249,7 @@ describe('useCards — getCard', () => {
   })
 
   it('sets error state on API failure', async () => {
-    axios.get.mockRejectedValueOnce({
+    mockedAxios.get.mockRejectedValueOnce({
       response: { data: { error: 'Card not found: fake-id' } },
     })
 
@@ -255,7 +262,7 @@ describe('useCards — getCard', () => {
   })
 
   it('returns null on network error without throwing', async () => {
-    axios.get.mockRejectedValueOnce(new Error('Network Error'))
+    mockedAxios.get.mockRejectedValueOnce(new Error('Network Error'))
 
     const { result } = renderHook(() => useCards())
     let card

@@ -7,6 +7,7 @@ import { useDecks } from '../hooks/useDecks'
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 vi.mock('../hooks/useDecks')
+const mockedUseDecks = vi.mocked(useDecks)
 
 const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async () => {
@@ -44,6 +45,7 @@ function makeUseDecks(overrides = {}) {
     deleteDeck: vi.fn(),
     updateDeck: vi.fn(),
     getDeck: vi.fn(),
+    refetch: vi.fn(),
     ...overrides,
   }
 }
@@ -65,19 +67,19 @@ beforeEach(() => {
 
 describe('DeckList — loading state', () => {
   it('shows a loading spinner while fetching', () => {
-    useDecks.mockReturnValue(makeUseDecks({ loading: true }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ loading: true }))
     renderDeckList()
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument()
   })
 
   it('hides the loading spinner once loading is complete', () => {
-    useDecks.mockReturnValue(makeUseDecks({ loading: false }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ loading: false }))
     renderDeckList()
     expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument()
   })
 
   it('disables the New Deck button while loading', () => {
-    useDecks.mockReturnValue(makeUseDecks({ loading: true }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ loading: true }))
     renderDeckList()
     expect(screen.getByRole('button', { name: /\+ New Deck/i })).toBeDisabled()
   })
@@ -87,26 +89,26 @@ describe('DeckList — loading state', () => {
 
 describe('DeckList — empty state', () => {
   it('shows the empty state when there are no decks', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [] }))
     renderDeckList()
     expect(screen.getByTestId('empty-state')).toBeInTheDocument()
   })
 
   it('empty state contains a helpful message', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [] }))
     renderDeckList()
     expect(screen.getByText(/No decks yet/i)).toBeInTheDocument()
   })
 
   it('empty state contains a New Deck call-to-action', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [] }))
     renderDeckList()
     const newDeckButtons = screen.getAllByRole('button', { name: /\+ New Deck/i })
     expect(newDeckButtons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('does not show the deck grid when there are no decks', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [] }))
     renderDeckList()
     expect(screen.queryByTestId('deck-grid')).not.toBeInTheDocument()
   })
@@ -116,20 +118,20 @@ describe('DeckList — empty state', () => {
 
 describe('DeckList — deck grid', () => {
   it('renders a DeckCard for each deck', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A, DECK_B] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A, DECK_B] }))
     renderDeckList()
     expect(screen.getByText('Mono Red')).toBeInTheDocument()
     expect(screen.getByText('Mono Blue')).toBeInTheDocument()
   })
 
   it('shows the deck grid container', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A] }))
     renderDeckList()
     expect(screen.getByTestId('deck-grid')).toBeInTheDocument()
   })
 
   it('does not show the empty state when decks are present', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A] }))
     renderDeckList()
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument()
   })
@@ -139,7 +141,7 @@ describe('DeckList — deck grid', () => {
 
 describe('DeckList — New Deck button', () => {
   it('renders the New Deck button in the header', () => {
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A] }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A] }))
     renderDeckList()
     expect(
       screen.getByRole('button', { name: /\+ New Deck/i })
@@ -148,7 +150,7 @@ describe('DeckList — New Deck button', () => {
 
   it('calls createDeck with a default name when clicked', async () => {
     const createDeck = vi.fn().mockResolvedValue(null)
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], createDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], createDeck }))
     renderDeckList()
 
     fireEvent.click(screen.getByRole('button', { name: /\+ New Deck/i }))
@@ -161,7 +163,7 @@ describe('DeckList — New Deck button', () => {
   it('navigates to /deck/:id after successful creation', async () => {
     const newDeck = { ...DECK_A, id: 'new-deck-id' }
     const createDeck = vi.fn().mockResolvedValue(newDeck)
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], createDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], createDeck }))
     renderDeckList()
 
     fireEvent.click(screen.getByRole('button', { name: /\+ New Deck/i }))
@@ -173,7 +175,7 @@ describe('DeckList — New Deck button', () => {
 
   it('does not navigate when createDeck returns null (error case)', async () => {
     const createDeck = vi.fn().mockResolvedValue(null)
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], createDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], createDeck }))
     renderDeckList()
 
     fireEvent.click(screen.getByRole('button', { name: /\+ New Deck/i }))
@@ -188,7 +190,7 @@ describe('DeckList — New Deck button', () => {
 describe('DeckList — delete flow', () => {
   it('calls deleteDeck after confirming deletion from a DeckCard', async () => {
     const deleteDeck = vi.fn().mockResolvedValue(true)
-    useDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], deleteDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ decks: [DECK_A], deleteDeck }))
     renderDeckList()
 
     // Open confirmation
@@ -206,13 +208,13 @@ describe('DeckList — delete flow', () => {
 
 describe('DeckList — error state', () => {
   it('shows an error banner when error is set', () => {
-    useDecks.mockReturnValue(makeUseDecks({ error: 'Failed to load decks' }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ error: 'Failed to load decks' }))
     renderDeckList()
     expect(screen.getByRole('alert')).toHaveTextContent('Failed to load decks')
   })
 
   it('does not show the error banner when error is null', () => {
-    useDecks.mockReturnValue(makeUseDecks({ error: null }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ error: null }))
     renderDeckList()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
