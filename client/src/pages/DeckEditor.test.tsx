@@ -22,6 +22,15 @@ vi.mock('axios', () => ({
   },
 }))
 
+const mockedUseDecks = vi.mocked(useDecks)
+const mockedUseCards = vi.mocked(useCards)
+const mockedAxios = {
+  get: vi.mocked(axios.get),
+  post: vi.mocked(axios.post),
+  put: vi.mocked(axios.put),
+  delete: vi.mocked(axios.delete),
+}
+
 const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -35,6 +44,7 @@ const DECK = {
   name: 'Mono Red Burn',
   format: 'standard',
   notes: 'Go fast.',
+  card_count: 8,
   cards: [
     { quantity: 4, name: 'Lightning Bolt', scryfall_id: null, section: 'mainboard' },
     { quantity: 2, name: 'Mountain', scryfall_id: null, section: 'mainboard' },
@@ -71,6 +81,7 @@ function makeUseDecks(overrides = {}) {
     updateDeck: vi.fn().mockResolvedValue(DECK),
     createDeck: vi.fn(),
     deleteDeck: vi.fn(),
+    refetch: vi.fn(),
     ...overrides,
   }
 }
@@ -103,8 +114,8 @@ function renderEditor(deckId = 'test-deck-id') {
 beforeEach(() => {
   vi.clearAllMocks()
   mockNavigate.mockReset()
-  useDecks.mockReturnValue(makeUseDecks())
-  useCards.mockReturnValue(makeUseCards())
+  mockedUseDecks.mockReturnValue(makeUseDecks())
+  mockedUseCards.mockReturnValue(makeUseCards())
   // Silence clipboard in jsdom (not implemented in test env)
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -122,7 +133,7 @@ describe('DeckEditor — renders without crashing', () => {
 
   it('renders loading state on mount', () => {
     // getDeck is async; the component shows a spinner before it resolves
-    useDecks.mockReturnValue(
+    mockedUseDecks.mockReturnValue(
       makeUseDecks({ getDeck: vi.fn().mockReturnValue(new Promise(() => {})) }),
     )
     renderEditor()
@@ -137,7 +148,7 @@ describe('DeckEditor — renders without crashing', () => {
   })
 
   it('renders an error state when getDeck returns null', async () => {
-    useDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(null) }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(null) }))
     renderEditor()
     await waitFor(() =>
       expect(screen.getByTestId('deck-editor-error')).toBeInTheDocument(),
@@ -176,7 +187,7 @@ describe('DeckEditor — deck data display', () => {
   })
 
   it('shows empty mainboard message when no mainboard cards', async () => {
-    useDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(EMPTY_DECK) }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(EMPTY_DECK) }))
     renderEditor('empty-deck-id')
     await waitFor(() =>
       expect(screen.getByTestId('mainboard-empty')).toBeInTheDocument(),
@@ -184,7 +195,7 @@ describe('DeckEditor — deck data display', () => {
   })
 
   it('shows empty sideboard message when no sideboard cards', async () => {
-    useDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(EMPTY_DECK) }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ getDeck: vi.fn().mockResolvedValue(EMPTY_DECK) }))
     renderEditor('empty-deck-id')
     await waitFor(() =>
       expect(screen.getByTestId('sideboard-empty')).toBeInTheDocument(),
@@ -211,7 +222,7 @@ describe('DeckEditor — inline name editing', () => {
 
   it('saves name and schedules auto-save on blur', async () => {
     const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ updateDeck }))
 
     renderEditor()
     await waitFor(() => screen.getByTestId('deck-name-heading'))
@@ -272,7 +283,7 @@ describe('DeckEditor — format selector', () => {
     renderEditor()
     await waitFor(() => screen.getByTestId('deck-format-select'))
 
-    const select = screen.getByTestId('deck-format-select')
+    const select = screen.getByTestId('deck-format-select') as HTMLSelectElement
     const options = Array.from(select.options).map((o) => o.value)
 
     expect(options).toContain('standard')
@@ -286,7 +297,7 @@ describe('DeckEditor — format selector', () => {
 
   it('schedules auto-save when format changes', async () => {
     const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ updateDeck }))
 
     renderEditor()
     await waitFor(() => screen.getByTestId('deck-format-select'))
@@ -308,7 +319,7 @@ describe('DeckEditor — format selector', () => {
 describe('DeckEditor — quantity controls via CardRow', () => {
   it('increments mainboard quantity via CardRow + button', async () => {
     const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ updateDeck }))
 
     renderEditor()
     await waitFor(() => screen.getByText('Lightning Bolt'))
@@ -331,7 +342,7 @@ describe('DeckEditor — quantity controls via CardRow', () => {
 
   it('removes mainboard card when quantity reaches 0', async () => {
     const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(
+    mockedUseDecks.mockReturnValue(
       makeUseDecks({
         updateDeck,
         getDeck: vi.fn().mockResolvedValue({
@@ -405,7 +416,7 @@ describe('DeckEditor — Export button', () => {
   })
 
   it('calls the export API and writes to clipboard when clicked', async () => {
-    axios.post.mockResolvedValueOnce({ data: { text: '4 Lightning Bolt\n2 Mountain' } })
+    mockedAxios.post.mockResolvedValueOnce({ data: { text: '4 Lightning Bolt\n2 Mountain' } })
 
     renderEditor()
     await waitFor(() => screen.getByTestId('export-btn'))
@@ -427,7 +438,7 @@ describe('DeckEditor — Export button', () => {
 describe('DeckEditor — auto-save', () => {
   it('accumulates multiple field changes into a single debounced updateDeck call', async () => {
     const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ updateDeck }))
 
     renderEditor()
     // Wait for the deck to load before taking over the clock
@@ -459,7 +470,7 @@ describe('DeckEditor — auto-save', () => {
 
   it('flushes pending saves immediately when the component unmounts (navigation)', async () => {
     const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ updateDeck }))
 
     const { unmount } = renderEditor()
     // Wait for the deck to finish loading
@@ -493,7 +504,7 @@ describe('DeckEditor — auto-save', () => {
 
   it('does not call updateDeck on unmount when there are no pending changes', async () => {
     const updateDeck = vi.fn().mockResolvedValue(DECK)
-    useDecks.mockReturnValue(makeUseDecks({ updateDeck }))
+    mockedUseDecks.mockReturnValue(makeUseDecks({ updateDeck }))
 
     const { unmount } = renderEditor()
     await waitFor(() => screen.getByTestId('deck-editor'))

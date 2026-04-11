@@ -15,6 +15,13 @@ vi.mock('axios', () => ({
   },
 }))
 
+const mockedAxios = {
+  get: vi.mocked(axios.get),
+  post: vi.mocked(axios.post),
+  put: vi.mocked(axios.put),
+  delete: vi.mocked(axios.delete),
+}
+
 const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -260,7 +267,7 @@ describe('ImportModal — successful import', () => {
     formatValue = 'standard',
     textValue = VALID_TEXT,
   } = {}) {
-    axios.post.mockResolvedValueOnce({ data: CREATED_DECK })
+    mockedAxios.post.mockResolvedValueOnce({ data: CREATED_DECK })
     renderModal()
 
     fireEvent.change(screen.getByTestId('import-deck-name'), {
@@ -310,8 +317,8 @@ describe('ImportModal — successful import', () => {
   })
 
   it('shows "Importing…" on the button while the request is in-flight', async () => {
-    let resolvePost
-    axios.post.mockReturnValueOnce(new Promise((r) => { resolvePost = r }))
+    let resolvePost: (value: unknown) => void
+    mockedAxios.post.mockReturnValueOnce(new Promise((r) => { resolvePost = r }))
 
     renderModal()
     fireEvent.change(screen.getByTestId('import-deck-name'), { target: { value: 'My Deck' } })
@@ -335,7 +342,7 @@ describe('ImportModal — successful import', () => {
 
 describe('ImportModal — failed import', () => {
   it('shows an API error banner when the request fails', async () => {
-    axios.post.mockRejectedValueOnce({
+    mockedAxios.post.mockRejectedValueOnce({
       response: { data: { error: 'text is required' } },
     })
 
@@ -350,7 +357,7 @@ describe('ImportModal — failed import', () => {
   })
 
   it('API error contains the server error message', async () => {
-    axios.post.mockRejectedValueOnce({
+    mockedAxios.post.mockRejectedValueOnce({
       response: { data: { error: 'name is required' } },
     })
 
@@ -365,7 +372,7 @@ describe('ImportModal — failed import', () => {
   })
 
   it('falls back to a generic message when no server error is available', async () => {
-    axios.post.mockRejectedValueOnce(new Error('Network Error'))
+    mockedAxios.post.mockRejectedValueOnce(new Error('Network Error'))
 
     renderModal()
     fireEvent.change(screen.getByTestId('import-deck-name'), { target: { value: 'My Deck' } })
@@ -378,7 +385,7 @@ describe('ImportModal — failed import', () => {
   })
 
   it('does not navigate when the request fails', async () => {
-    axios.post.mockRejectedValueOnce(new Error('fail'))
+    mockedAxios.post.mockRejectedValueOnce(new Error('fail'))
 
     renderModal()
     fireEvent.change(screen.getByTestId('import-deck-name'), { target: { value: 'My Deck' } })
@@ -390,7 +397,7 @@ describe('ImportModal — failed import', () => {
   })
 
   it('re-enables the Import button after a failed request', async () => {
-    axios.post.mockRejectedValueOnce(new Error('fail'))
+    mockedAxios.post.mockRejectedValueOnce(new Error('fail'))
 
     renderModal()
     fireEvent.change(screen.getByTestId('import-deck-name'), { target: { value: 'My Deck' } })
@@ -408,7 +415,7 @@ describe('ImportModal — failed import', () => {
       ...CREATED_DECK,
       unknown: ['Lightning Bolt', 'Mountain', 'Smash to Smithereens'],
     }
-    axios.post.mockResolvedValueOnce({ data: deckWithUnknowns })
+    mockedAxios.post.mockResolvedValueOnce({ data: deckWithUnknowns })
 
     renderModal()
     fireEvent.change(screen.getByTestId('import-deck-name'), { target: { value: 'My Deck' } })
