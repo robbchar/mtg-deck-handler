@@ -1,10 +1,11 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import axios from 'axios'
+import client from '../api/client'
 import { useGames } from './useGames'
 import type { GameEntry } from '../types'
 
-vi.mock('axios', () => ({
+vi.mock('../firebase', () => ({ auth: { currentUser: null } }))
+vi.mock('../api/client', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
@@ -14,10 +15,10 @@ vi.mock('axios', () => ({
 }))
 
 const mockedAxios = {
-  get: vi.mocked(axios.get),
-  post: vi.mocked(axios.post),
-  put: vi.mocked(axios.put),
-  delete: vi.mocked(axios.delete),
+  get: vi.mocked(client.get),
+  post: vi.mocked(client.post),
+  put: vi.mocked(client.put),
+  delete: vi.mocked(client.delete),
 }
 
 const DECK_ID = 'deck-abc-123'
@@ -72,7 +73,7 @@ describe('useGames — initial state', () => {
 
   it('does not fetch when deckId is undefined', () => {
     renderHook(() => useGames(undefined))
-    expect(axios.get).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalled()
   })
 })
 
@@ -82,7 +83,7 @@ describe('useGames — fetch on mount', () => {
   it('calls GET /api/decks/:id/games with the deck id', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: [] })
     renderHook(() => useGames(DECK_ID))
-    await waitFor(() => expect(axios.get).toHaveBeenCalledWith(`/api/decks/${DECK_ID}/games`))
+    await waitFor(() => expect(client.get).toHaveBeenCalledWith(`/api/decks/${DECK_ID}/games`))
   })
 
   it('populates games array after successful fetch', async () => {
@@ -156,7 +157,7 @@ describe('useGames — addGame', () => {
       await result.current.addGame({ result: 'win', turn_ended: 6 })
     })
 
-    expect(axios.post).toHaveBeenCalledWith(
+    expect(client.post).toHaveBeenCalledWith(
       `/api/decks/${DECK_ID}/games`,
       expect.objectContaining({ result: 'win', turn_ended: 6 }),
     )
@@ -234,7 +235,7 @@ describe('useGames — removeGame', () => {
       await result.current.removeGame(MOCK_ENTRY.id)
     })
 
-    expect(axios.delete).toHaveBeenCalledWith(
+    expect(client.delete).toHaveBeenCalledWith(
       `/api/decks/${DECK_ID}/games/${MOCK_ENTRY.id}`,
     )
   })
@@ -292,7 +293,7 @@ describe('useGames — refetch', () => {
       await result.current.refetch()
     })
 
-    expect(axios.get).toHaveBeenCalledTimes(2)
+    expect(client.get).toHaveBeenCalledTimes(2)
   })
 
   it('updates games after refetch', async () => {

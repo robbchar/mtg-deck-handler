@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import axios from 'axios'
+import client from '../api/client'
 import type { GameEntry, NewGameEntry } from '../types'
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -23,7 +23,7 @@ export function useGames(deckId: string | undefined) {
     setLoading(true)
     setError(null)
     try {
-      const { data } = await axios.get<GameEntry[]>(`/api/decks/${deckId}/games`)
+      const { data } = await client.get<GameEntry[]>(`/api/decks/${deckId}/games`)
       setGames(data)
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load game log'))
@@ -40,7 +40,7 @@ export function useGames(deckId: string | undefined) {
       setLoading(true)
       setError(null)
       try {
-        const { data } = await axios.get<GameEntry[]>(`/api/decks/${deckId}/games`)
+        const { data } = await client.get<GameEntry[]>(`/api/decks/${deckId}/games`)
         if (!cancelled) setGames(data)
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err, 'Failed to load game log'))
@@ -59,7 +59,7 @@ export function useGames(deckId: string | undefined) {
     async (gameId: string): Promise<boolean> => {
       if (!deckId) return false
       try {
-        await axios.delete(`/api/decks/${deckId}/games/${gameId}`)
+        await client.delete(`/api/decks/${deckId}/games/${gameId}`)
         setGames((prev) => prev.filter((g) => g.id !== gameId))
         return true
       } catch (err) {
@@ -74,7 +74,7 @@ export function useGames(deckId: string | undefined) {
     async (gameData: NewGameEntry): Promise<GameEntry | null> => {
       if (!deckId) return null
       try {
-        const { data: entry } = await axios.post<GameEntry>(
+        const { data: entry } = await client.post<GameEntry>(
           `/api/decks/${deckId}/games`,
           gameData,
         )

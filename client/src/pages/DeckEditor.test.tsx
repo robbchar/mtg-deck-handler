@@ -8,6 +8,10 @@ import { useCards } from '../hooks/useCards'
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
+vi.mock('../firebase', () => ({ auth: { currentUser: null } }))
+vi.mock('../api/client', () => ({
+  default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+}))
 vi.mock('../hooks/useDecks')
 vi.mock('../hooks/useCards')
 vi.mock('../hooks/useGames', () => ({
