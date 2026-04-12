@@ -10,8 +10,8 @@ import react from '@vitejs/plugin-react'
  * still receives the full /api/decks path — matching production behaviour.
  *
  * Example: GET /api/decks
- *   → rewritten to /robbchar-3db11/us-central1/api/api/decks (sent to port 5001)
- *   → Functions emulator strips /robbchar-3db11/us-central1/api
+ *   → rewritten to /robbchar-3db11/us-central1/mtgApi/api/decks (sent to port 5001)
+ *   → Functions emulator strips /robbchar-3db11/us-central1/mtgApi
  *   → Express sees GET /api/decks ✓
  *
  * Test: jsdom environment with @testing-library/jest-dom matchers auto-imported
@@ -29,7 +29,7 @@ export default defineConfig({
         target: 'http://localhost:5001',
         changeOrigin: true,
         rewrite: (path) =>
-          path.replace(/^\/api/, '/robbchar-3db11/us-central1/api/api'),
+          path.replace(/^\/api/, '/robbchar-3db11/us-central1/mtgApi/api'),
       },
     },
   },
