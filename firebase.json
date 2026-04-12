@@ -15,7 +15,10 @@
   },
   "functions": {
     "source": "server",
-    "runtime": "nodejs20"
+    "runtime": "nodejs22"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   },
   "emulators": {
     "auth": { "port": 9099 },
