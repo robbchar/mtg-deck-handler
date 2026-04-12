@@ -1,5 +1,12 @@
 'use strict';
 
+jest.mock('../middleware/auth', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { uid: 'test-uid', email: 'robbchar@gmail.com' };
+    next();
+  },
+}));
+
 /**
  * Unit tests for card API routes.
  *

@@ -1,5 +1,12 @@
 'use strict';
 
+jest.mock('../middleware/auth', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { uid: 'test-uid', email: 'robbchar@gmail.com' };
+    next();
+  },
+}));
+
 const request = require('supertest');
 
 jest.mock('../services/gameService');
