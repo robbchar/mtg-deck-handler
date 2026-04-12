@@ -2,7 +2,7 @@
   "name": "mtg-deck-manager-server",
   "version": "1.0.0",
   "private": true,
-  "main": "index.js",
+  "main": "functions/index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
@@ -12,6 +12,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^7.2.5",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
