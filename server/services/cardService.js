@@ -3,55 +3,25 @@
 /**
  * Card Service — cache-first Scryfall card lookup with rate-limited fetching.
  *
- * Cache files live at data/cache/{scryfallId}.json and are considered fresh
- * for 7 days. Stale or missing entries are re-fetched from the Scryfall REST
- * API. All outgoing requests are serialised through the shared rate-limiter
- * queue so the 10 req/s hard limit is never violated.
+ * Cache entries live in the Firestore collection `mtg-deck-handler-card-cache`
+ * and are considered fresh for 7 days. Stale or missing entries are re-fetched
+ * from the Scryfall REST API. All outgoing requests are serialised through the
+ * shared rate-limiter queue so the 10 req/s hard limit is never violated.
  *
  * @module services/cardService
  */
 
-const fs = require('fs');
-const path = require('path');
 const { scryfallLimiter } = require('../middleware/rateLimiter');
+const { db } = require('./db');
 
 /** Cache time-to-live: 7 days expressed in milliseconds. */
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const SCRYFALL_BASE = 'https://api.scryfall.com';
 
-// Resolve cache directory using the same strategy as deckService:
-// DATA_DIR is relative to the server root (one level up from this file).
-// If DATA_DIR is already absolute, path.resolve uses it as-is.
-const dataDir = path.resolve(__dirname, '..', process.env.DATA_DIR || '../data');
-const CACHE_DIR = path.join(dataDir, 'cache');
+const CACHE_COLLECTION = 'mtg-deck-handler-card-cache';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Returns the absolute file path for a cached Scryfall card.
- *
- * @param {string} scryfallId
- * @returns {string}
- */
-function cachePath(scryfallId) {
-  return path.join(CACHE_DIR, `${scryfallId}.json`);
-}
-
-/**
- * Atomically writes JSON data to a file.
- * Writes to `<filePath>.tmp` first, then renames. Parent directories are
- * created if they do not already exist.
- *
- * @param {string} filePath - Destination path
- * @param {unknown} data    - Value to serialise as JSON
- */
-function atomicWrite(filePath, data) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-  fs.renameSync(tmp, filePath);
-}
 
 /**
  * Builds a rate-limit error that callers can identify as retryable.
@@ -71,27 +41,26 @@ function makeRateLimitError(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Returns the age in milliseconds of a cached card file, or `null` when the
- * card is not cached. Useful for debugging and monitoring cache health.
+ * Returns the age in milliseconds of a cached card, or null if not cached.
  *
- * @param {string} scryfallId
- * @returns {number|null}
+ * @param {string} cacheKey
+ * @returns {Promise<number|null>}
  */
-function getCacheAge(scryfallId) {
-  const filePath = cachePath(scryfallId);
-  if (!fs.existsSync(filePath)) return null;
-  const stats = fs.statSync(filePath);
-  return Math.max(0, Date.now() - stats.mtimeMs);
+async function getCacheAge(cacheKey) {
+  const snap = await db.collection(CACHE_COLLECTION).doc(cacheKey).get();
+  if (!snap.exists) return null;
+  const { cached_at } = snap.data();
+  return Math.max(0, Date.now() - new Date(cached_at).getTime());
 }
 
 /**
  * Returns a Scryfall card object by its UUID using a cache-first strategy.
  *
  * Flow:
- *   1. If a fresh cache file exists (age < 7 days), return it immediately —
- *      no Scryfall request is made.
+ *   1. If a fresh Firestore cache entry exists (age < 7 days), return it
+ *      immediately — no Scryfall request is made.
  *   2. Otherwise enqueue a fetch through the rate limiter, save the result to
- *      `data/cache/{id}.json`, and return the card.
+ *      Firestore, and return the card.
  *
  * Special responses:
  *   - HTTP 404: returns `null` (card not found) without throwing.
@@ -102,9 +71,10 @@ function getCacheAge(scryfallId) {
  * @returns {Promise<object|null>} Scryfall card object, or `null` if not found.
  */
 async function getCard(scryfallId) {
-  const age = getCacheAge(scryfallId);
+  const age = await getCacheAge(scryfallId);
   if (age !== null && age < CACHE_TTL_MS) {
-    return JSON.parse(fs.readFileSync(cachePath(scryfallId), 'utf8'));
+    const snap = await db.collection(CACHE_COLLECTION).doc(scryfallId).get();
+    return snap.data().card;
   }
 
   const card = await scryfallLimiter.enqueue(async () => {
@@ -124,7 +94,7 @@ async function getCard(scryfallId) {
   });
 
   if (card !== null) {
-    atomicWrite(cachePath(scryfallId), card);
+    await db.collection(CACHE_COLLECTION).doc(scryfallId).set({ card, cached_at: new Date().toISOString() });
   }
 
   return card;
@@ -135,7 +105,7 @@ async function getCard(scryfallId) {
  *
  * Calls `GET api.scryfall.com/cards/search?q={query}&order=name`.
  * Each card in the response is individually cached so subsequent `getCard`
- * calls for the same IDs are served from disk.
+ * calls for the same IDs are served from Firestore.
  *
  * Special responses:
  *   - HTTP 404 (no matches): returns an empty array — no error thrown.
@@ -170,7 +140,7 @@ async function searchCards(query) {
   // Cache each card individually for future getCard() cache hits.
   for (const card of cards) {
     if (card && card.id) {
-      atomicWrite(cachePath(card.id), card);
+      await db.collection(CACHE_COLLECTION).doc(card.id).set({ card, cached_at: new Date().toISOString() });
     }
   }
 
@@ -192,14 +162,11 @@ async function searchCards(query) {
  */
 async function getCardBySetCollector(setCode, collectorNumber) {
   const cacheKey = `set_${setCode.toLowerCase()}_${collectorNumber}`;
-  const cacheFile = path.join(CACHE_DIR, `${cacheKey}.json`);
 
-  const age = fs.existsSync(cacheFile)
-    ? Math.max(0, Date.now() - fs.statSync(cacheFile).mtimeMs)
-    : null;
-
+  const age = await getCacheAge(cacheKey);
   if (age !== null && age < CACHE_TTL_MS) {
-    return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    const snap = await db.collection(CACHE_COLLECTION).doc(cacheKey).get();
+    return snap.data().card;
   }
 
   const card = await scryfallLimiter.enqueue(async () => {
@@ -215,10 +182,10 @@ async function getCardBySetCollector(setCode, collectorNumber) {
   });
 
   if (card !== null) {
-    // Cache by UUID so future getCard() calls are served from disk.
-    atomicWrite(cachePath(card.id), card);
+    // Cache by UUID so future getCard() calls are served from Firestore.
+    await db.collection(CACHE_COLLECTION).doc(card.id).set({ card, cached_at: new Date().toISOString() });
     // Cache by set+collector for repeat imports without a UUID.
-    atomicWrite(cacheFile, card);
+    await db.collection(CACHE_COLLECTION).doc(cacheKey).set({ card, cached_at: new Date().toISOString() });
   }
 
   return card;
