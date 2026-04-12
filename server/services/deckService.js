@@ -76,7 +76,6 @@ async function updateDeck(id, data) {
   const updated = {
     ...existing,
     ...data,
-    id: existing.id,
     created_at: existing.created_at,
     updated_at: new Date().toISOString(),
   };

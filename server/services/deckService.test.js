@@ -119,6 +119,15 @@ describe('createDeck(data)', () => {
       expect.objectContaining({ name: 'Stored' }),
     );
   });
+
+  it('does not allow the caller to override the generated id', async () => {
+    mockCollRef.add.mockResolvedValue({ id: 'generated' });
+    const deck = await createDeck({ name: 'Test', id: 'fixed-id' });
+    expect(deck.id).toBe('generated');
+    expect(mockCollRef.add).toHaveBeenCalledWith(
+      expect.not.objectContaining({ id: expect.anything() }),
+    );
+  });
 });
 
 // ── updateDeck ────────────────────────────────────────────────────────────────
@@ -146,15 +155,38 @@ describe('updateDeck(id, data)', () => {
     mockDocRef.get.mockResolvedValue({ exists: false });
     await expect(updateDeck('ghost', {})).rejects.toThrow('Deck not found: ghost');
   });
+
+  it('calls docRef.update() with merged data excluding id', async () => {
+    mockDocRef.get.mockResolvedValue({ exists: true, id: 'deck-1', data: () => existing });
+    mockDocRef.update.mockResolvedValue(undefined);
+    await updateDeck('deck-1', { notes: 'x' });
+    expect(mockDocRef.update).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: 'x', name: 'Before' }),
+    );
+    expect(mockDocRef.update).toHaveBeenCalledWith(
+      expect.not.objectContaining({ id: expect.anything() }),
+    );
+  });
+
+  it('does not allow the caller to change the deck id', async () => {
+    mockDocRef.get.mockResolvedValue({ exists: true, id: 'deck-1', data: () => existing });
+    mockDocRef.update.mockResolvedValue(undefined);
+    const result = await updateDeck('deck-1', { id: 'hijacked' });
+    expect(result.id).toBe('deck-1');
+    expect(mockDocRef.update).toHaveBeenCalledWith(
+      expect.not.objectContaining({ id: expect.anything() }),
+    );
+  });
 });
 
 // ── deleteDeck ────────────────────────────────────────────────────────────────
 
 describe('deleteDeck(id)', () => {
-  it('returns { deleted: true }', async () => {
+  it('returns { deleted: true } and calls delete()', async () => {
     mockDocRef.get.mockResolvedValue({ exists: true, id: 'deck-1', data: () => ({}) });
     mockDocRef.delete.mockResolvedValue(undefined);
     expect(await deleteDeck('deck-1')).toEqual({ deleted: true });
+    expect(mockDocRef.delete).toHaveBeenCalledTimes(1);
   });
 
   it('throws when deck does not exist', async () => {
