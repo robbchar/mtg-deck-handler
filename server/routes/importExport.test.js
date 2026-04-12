@@ -1,5 +1,12 @@
 'use strict';
 
+jest.mock('../middleware/auth', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { uid: 'test-uid', email: 'robbchar@gmail.com' };
+    next();
+  },
+}));
+
 const request = require('supertest');
 
 jest.mock('../services/deckService');
@@ -99,7 +106,7 @@ describe('POST /api/import', () => {
 
   it('returns 201 with the created deck on success', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     const res = await request(app)
       .post('/api/import')
@@ -111,7 +118,7 @@ describe('POST /api/import', () => {
 
   it('calls parseMtgaText with the raw text from the request body', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: MTGA_TEXT, name: 'Mono Red' });
 
@@ -120,7 +127,7 @@ describe('POST /api/import', () => {
 
   it('passes trimmed name and format to createDeck', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app)
       .post('/api/import')
@@ -133,7 +140,7 @@ describe('POST /api/import', () => {
 
   it('populates unknown[] with all imported card names', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: MTGA_TEXT, name: 'Mono Red' });
 
@@ -146,7 +153,7 @@ describe('POST /api/import', () => {
 
   it('stores mainboard cards with section:"mainboard" and null scryfall_id', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: MTGA_TEXT, name: 'Mono Red' });
 
@@ -161,7 +168,7 @@ describe('POST /api/import', () => {
 
   it('stores sideboard cards with section:"sideboard" and null scryfall_id', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: MTGA_TEXT, name: 'Mono Red' });
 
@@ -207,7 +214,7 @@ describe('POST /api/import', () => {
       sideboard: [],
       unknown: [],
     });
-    deckService.createDeck.mockReturnValue({ ...MOCK_DECK, unknown: ['Totally Fake Card'] });
+    deckService.createDeck.mockResolvedValue({ ...MOCK_DECK, unknown: ['Totally Fake Card'] });
 
     const res = await request(app)
       .post('/api/import')
@@ -228,7 +235,7 @@ describe('POST /api/import', () => {
   it('cards that cannot be resolved still produce a 201 (non-fatal)', async () => {
     cardService.searchCards.mockRejectedValue(new Error('Scryfall unreachable'));
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     const res = await request(app).post('/api/import').send({ text: MTGA_TEXT, name: 'Mono Red' });
     expect(res.statusCode).toBe(201);
@@ -236,7 +243,7 @@ describe('POST /api/import', () => {
 
   it('works without an optional format field', async () => {
     mtgaService.parseMtgaText.mockReturnValue(PARSED);
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: MTGA_TEXT, name: 'Mono Red' });
 
@@ -316,7 +323,7 @@ describe('POST /api/import', () => {
       updated_at: '2024-01-01T00:00:00.000Z',
     };
 
-    deckService.createDeck.mockReturnValue(SAMPLE_DECK);
+    deckService.createDeck.mockResolvedValue(SAMPLE_DECK);
     deckService.getDeck.mockReturnValue(SAMPLE_DECK);
 
     // Step 1: POST /api/import
@@ -366,7 +373,7 @@ describe('POST /api/import — Scryfall resolution (mocked cardService)', () => 
       sideboard: [],
       unknown: [],
     });
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: '4 Lightning Bolt', name: 'Mono Red' });
 
@@ -386,7 +393,7 @@ describe('POST /api/import — Scryfall resolution (mocked cardService)', () => 
       sideboard: [],
       unknown: [],
     });
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: '4 Lightning Bolt', name: 'Mono Red' });
 
@@ -408,7 +415,7 @@ describe('POST /api/import — Scryfall resolution (mocked cardService)', () => 
       sideboard: [],
       unknown: [],
     });
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: '9 Mountain (ANB) 114', name: 'Lands' });
 
@@ -427,7 +434,7 @@ describe('POST /api/import — Scryfall resolution (mocked cardService)', () => 
       sideboard: [],
       unknown: [],
     });
-    deckService.createDeck.mockReturnValue(MOCK_DECK);
+    deckService.createDeck.mockResolvedValue(MOCK_DECK);
 
     await request(app).post('/api/import').send({ text: '4 Lightning Bolt (FDN) 999', name: 'Test' });
 

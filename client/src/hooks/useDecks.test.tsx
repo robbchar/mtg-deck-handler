@@ -1,11 +1,12 @@
 import React from 'react'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import axios from 'axios'
+import client from '../api/client'
 import { DeckProvider } from '../context/DeckContext'
 import { useDecks } from './useDecks'
 
-vi.mock('axios', () => ({
+vi.mock('../firebase', () => ({ auth: { currentUser: null } }))
+vi.mock('../api/client', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
@@ -15,10 +16,10 @@ vi.mock('axios', () => ({
 }))
 
 const mockedAxios = {
-  get: vi.mocked(axios.get),
-  post: vi.mocked(axios.post),
-  put: vi.mocked(axios.put),
-  delete: vi.mocked(axios.delete),
+  get: vi.mocked(client.get),
+  post: vi.mocked(client.post),
+  put: vi.mocked(client.put),
+  delete: vi.mocked(client.delete),
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ describe('useDecks — mount fetch', () => {
 
     renderHook(() => useDecks(), { wrapper })
 
-    await waitFor(() => expect(axios.get).toHaveBeenCalledWith('/api/decks'))
+    await waitFor(() => expect(client.get).toHaveBeenCalledWith('/api/decks'))
   })
 
   it('populates decks after a successful fetch', async () => {
@@ -247,7 +248,7 @@ describe('useDecks — createDeck', () => {
       await result.current.createDeck({ name: 'Mono Red', format: 'Standard' })
     })
 
-    expect(axios.post).toHaveBeenCalledWith('/api/decks', {
+    expect(client.post).toHaveBeenCalledWith('/api/decks', {
       name: 'Mono Red',
       format: 'Standard',
     })
@@ -353,7 +354,7 @@ describe('useDecks — updateDeck', () => {
     })
 
     expect(res).toBeNull()
-    expect(axios.put).not.toHaveBeenCalled()
+    expect(client.put).not.toHaveBeenCalled()
   })
 
   it('calls PUT /api/decks/:id with the patch data', async () => {
@@ -367,7 +368,7 @@ describe('useDecks — updateDeck', () => {
       await result.current.updateDeck('deck-aaa', { notes: 'hi' })
     })
 
-    expect(axios.put).toHaveBeenCalledWith('/api/decks/deck-aaa', { notes: 'hi' })
+    expect(client.put).toHaveBeenCalledWith('/api/decks/deck-aaa', { notes: 'hi' })
   })
 })
 
@@ -461,7 +462,7 @@ describe('useDecks — deleteDeck', () => {
     })
 
     expect(res).toBe(false)
-    expect(axios.delete).not.toHaveBeenCalled()
+    expect(client.delete).not.toHaveBeenCalled()
   })
 
   it('calls DELETE /api/decks/:id', async () => {
@@ -475,7 +476,7 @@ describe('useDecks — deleteDeck', () => {
       await result.current.deleteDeck('deck-aaa')
     })
 
-    expect(axios.delete).toHaveBeenCalledWith('/api/decks/deck-aaa')
+    expect(client.delete).toHaveBeenCalledWith('/api/decks/deck-aaa')
   })
 })
 
@@ -495,8 +496,8 @@ describe('useDecks — getDeck', () => {
 
     expect(deck).toEqual(DECK_A)
     // Mount GET + getDeck GET
-    expect(axios.get).toHaveBeenCalledTimes(2)
-    expect(axios.get).toHaveBeenCalledWith('/api/decks/deck-aaa')
+    expect(client.get).toHaveBeenCalledTimes(2)
+    expect(client.get).toHaveBeenCalledWith('/api/decks/deck-aaa')
   })
 
   it('fetches from the API when the deck is not in local state', async () => {
@@ -512,7 +513,7 @@ describe('useDecks — getDeck', () => {
     })
 
     expect(deck).toEqual(DECK_A)
-    expect(axios.get).toHaveBeenCalledWith('/api/decks/deck-aaa')
+    expect(client.get).toHaveBeenCalledWith('/api/decks/deck-aaa')
   })
 
   it('returns null and sets error on API failure', async () => {

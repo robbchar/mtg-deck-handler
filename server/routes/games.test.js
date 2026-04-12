@@ -1,5 +1,12 @@
 'use strict';
 
+jest.mock('../middleware/auth', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { uid: 'test-uid', email: 'robbchar@gmail.com' };
+    next();
+  },
+}));
+
 const request = require('supertest');
 
 jest.mock('../services/gameService');
@@ -131,21 +138,13 @@ describe('DELETE /api/decks/:id/games/:gameId', () => {
     expect(gameService.removeGame).toHaveBeenCalledWith(DECK_ID, GAME_ID);
   });
 
-  it('returns 404 when the game log is not found', async () => {
-    gameService.removeGame.mockImplementation(() => {
-      throw new Error(`Game log not found for deck: ${DECK_ID}`);
-    });
-    const res = await request(app).delete(`/api/decks/${DECK_ID}/games/${GAME_ID}`);
-    expect(res.statusCode).toBe(404);
-    expect(res.body).toHaveProperty('error');
-  });
-
-  it('returns 404 when the game entry is not found', async () => {
+  it('returns 404 when the game entry is not found (service throws Game not found)', async () => {
     gameService.removeGame.mockImplementation(() => {
       throw new Error(`Game not found: ${GAME_ID}`);
     });
     const res = await request(app).delete(`/api/decks/${DECK_ID}/games/${GAME_ID}`);
     expect(res.statusCode).toBe(404);
+    expect(res.body).toHaveProperty('error');
   });
 
   it('returns 500 on unexpected errors', async () => {

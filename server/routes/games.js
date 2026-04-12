@@ -15,9 +15,9 @@ const router = Router({ mergeParams: true });
  * GET /api/decks/:id/games
  * Returns all logged games for a deck, newest first.
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const games = getGames(req.params.id);
+    const games = await getGames(req.params.id);
     res.json(games);
   } catch (err) {
     console.error('GET /api/decks/:id/games error:', err);
@@ -29,9 +29,9 @@ router.get('/', (req, res) => {
  * POST /api/decks/:id/games
  * Appends a new game entry. `result` ("win" | "loss") is required.
  */
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const entry = addGame(req.params.id, req.body || {});
+    const entry = await addGame(req.params.id, req.body || {});
     res.status(201).json(entry);
   } catch (err) {
     if (err.message && err.message.startsWith('result is required')) {
@@ -46,15 +46,12 @@ router.post('/', (req, res) => {
  * DELETE /api/decks/:id/games/:gameId
  * Removes a single game entry from the deck's log.
  */
-router.delete('/:gameId', (req, res) => {
+router.delete('/:gameId', async (req, res) => {
   try {
-    const result = removeGame(req.params.id, req.params.gameId);
+    const result = await removeGame(req.params.id, req.params.gameId);
     res.json(result);
   } catch (err) {
-    if (err.message && (
-      err.message.startsWith('Game log not found') ||
-      err.message.startsWith('Game not found')
-    )) {
+    if (err.message && err.message.startsWith('Game not found')) {
       return res.status(404).json({ error: err.message });
     }
     console.error('DELETE /api/decks/:id/games/:gameId error:', err);

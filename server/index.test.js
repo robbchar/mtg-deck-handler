@@ -1,5 +1,12 @@
 'use strict';
 
+jest.mock('./middleware/auth', () => ({
+  requireAuth: (req, _res, next) => {
+    req.user = { uid: 'test-uid', email: 'robbchar@gmail.com' };
+    next();
+  },
+}));
+
 const request = require('supertest');
 
 // Stub out deckService so index.test.js never touches the filesystem.
@@ -27,7 +34,7 @@ jest.mock('./services/mtgaService', () => ({
 jest.mock('./services/cardService', () => ({
   getCard: jest.fn().mockResolvedValue(null),
   searchCards: jest.fn().mockResolvedValue([]),
-  getCacheAge: jest.fn().mockReturnValue(null),
+  getCacheAge: jest.fn().mockResolvedValue(null),
 }));
 
 const app = require('./index');

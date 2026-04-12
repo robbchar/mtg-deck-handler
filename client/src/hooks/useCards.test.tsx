@@ -1,9 +1,10 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import axios from 'axios'
+import client from '../api/client'
 import { useCards } from './useCards'
 
-vi.mock('axios', () => ({
+vi.mock('../firebase', () => ({ auth: { currentUser: null } }))
+vi.mock('../api/client', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
@@ -13,10 +14,10 @@ vi.mock('axios', () => ({
 }))
 
 const mockedAxios = {
-  get: vi.mocked(axios.get),
-  post: vi.mocked(axios.post),
-  put: vi.mocked(axios.put),
-  delete: vi.mocked(axios.delete),
+  get: vi.mocked(client.get),
+  post: vi.mocked(client.post),
+  put: vi.mocked(client.put),
+  delete: vi.mocked(client.delete),
 }
 
 const MOCK_CARD = {
@@ -84,7 +85,7 @@ describe('useCards — searchCards', () => {
       await result.current.searchCards('lightning bolt')
     })
 
-    expect(axios.get).toHaveBeenCalledWith('/api/cards/search', {
+    expect(client.get).toHaveBeenCalledWith('/api/cards/search', {
       params: { q: 'lightning bolt' },
     })
   })
@@ -97,7 +98,7 @@ describe('useCards — searchCards', () => {
       await result.current.searchCards('  lightning bolt  ')
     })
 
-    expect(axios.get).toHaveBeenCalledWith('/api/cards/search', {
+    expect(client.get).toHaveBeenCalledWith('/api/cards/search', {
       params: { q: 'lightning bolt' },
     })
   })
@@ -182,7 +183,7 @@ describe('useCards — searchCards', () => {
     })
 
     expect(cards).toEqual([])
-    expect(axios.get).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalled()
   })
 
   it('returns empty array and skips API call for whitespace-only query', async () => {
@@ -193,7 +194,7 @@ describe('useCards — searchCards', () => {
     })
 
     expect(cards).toEqual([])
-    expect(axios.get).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalled()
   })
 
   it('returns empty array for null query without throwing', async () => {
@@ -204,7 +205,7 @@ describe('useCards — searchCards', () => {
     })
 
     expect(cards).toEqual([])
-    expect(axios.get).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalled()
   })
 })
 
@@ -231,7 +232,7 @@ describe('useCards — getCard', () => {
       await result.current.getCard('scryfall-abc-001')
     })
 
-    expect(axios.get).toHaveBeenCalledWith('/api/cards/scryfall-abc-001')
+    expect(client.get).toHaveBeenCalledWith('/api/cards/scryfall-abc-001')
   })
 
   it('returns null on 404 without throwing', async () => {
@@ -281,7 +282,7 @@ describe('useCards — getCard', () => {
     })
 
     expect(card).toBeNull()
-    expect(axios.get).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalled()
   })
 
   it('returns null for empty string scryfallId without calling the API', async () => {
@@ -292,6 +293,6 @@ describe('useCards — getCard', () => {
     })
 
     expect(card).toBeNull()
-    expect(axios.get).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalled()
   })
 })

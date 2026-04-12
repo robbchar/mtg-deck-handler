@@ -6,6 +6,13 @@ import { useDecks } from '../hooks/useDecks'
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
+vi.mock('../firebase', () => ({ auth: { currentUser: null } }))
+vi.mock('../api/client', () => ({
+  default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+}))
+vi.mock('../context/AuthContext', () => ({
+  useAuth: () => ({ user: null, loading: false, signIn: vi.fn(), signOut: vi.fn() }),
+}))
 vi.mock('../hooks/useDecks')
 const mockedUseDecks = vi.mocked(useDecks)
 

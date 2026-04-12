@@ -1,21 +1,30 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { DeckProvider } from './context/DeckContext'
 import { ToastProvider } from './context/ToastContext'
+import { useAuth } from './context/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
+import LoginPage from './components/LoginPage'
+import Spinner from './components/Spinner'
 import DeckList from './pages/DeckList'
 import DeckEditor from './pages/DeckEditor'
 
 /**
  * Root application component.
  *
+ * Shows a loading spinner while Firebase resolves auth state.
+ * Shows LoginPage when no user is signed in.
+ * Shows the full app (Router + routes) when authenticated.
+ *
  * Routes:
  *   /           → DeckList  — browse and manage all decks
  *   /deck/:id   → DeckEditor — edit a specific deck
- *
- * ErrorBoundary wraps each page so a crash in one page doesn't affect the other.
- * ToastProvider makes addToast available to all descendants via useToastContext.
  */
 function App() {
+  const { user, loading } = useAuth()
+
+  if (loading) return <Spinner />
+  if (!user) return <LoginPage />
+
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <DeckProvider>

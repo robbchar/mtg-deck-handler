@@ -13,6 +13,7 @@ import GameLogger from '../components/GameLogger'
 import GameLogList from '../components/GameLogList'
 import Spinner from '../components/Spinner'
 import FormatSelect from '../components/FormatSelect'
+import UserAvatar from '../components/UserAvatar'
 import type { CardEntry, NewGameEntry, ScryfallCard } from '../types'
 
 type ViewMode = 'grid' | 'compact' | 'list'
@@ -453,6 +454,7 @@ function DeckEditor() {
               : 'Export'}
           </button>
 
+          <UserAvatar />
         </div>
       </header>
 

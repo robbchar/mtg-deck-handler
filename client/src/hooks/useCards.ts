@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import axios from 'axios'
+import client from '../api/client'
 import type { ScryfallCard } from '../types'
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -27,7 +27,7 @@ export function useCards() {
     setSearching(true)
     setError(null)
     try {
-      const { data } = await axios.get<ScryfallCard[]>('/api/cards/search', {
+      const { data } = await client.get<ScryfallCard[]>('/api/cards/search', {
         params: { q: query.trim() },
       })
       return data
@@ -47,7 +47,7 @@ export function useCards() {
     if (!scryfallId) return null
     setError(null)
     try {
-      const { data } = await axios.get<ScryfallCard>(`/api/cards/${scryfallId}`)
+      const { data } = await client.get<ScryfallCard>(`/api/cards/${scryfallId}`)
       return data
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to fetch card'))

@@ -1,0 +1,39 @@
+name: Deploy Cloud Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'firebase.json'
+      - '.firebaserc'
+
+jobs:
+  deploy:
+    name: Deploy Functions
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run server tests
+        run: npm run test:server
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ROBBCHAR_3DB11 }}
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy Cloud Functions
+        run: firebase deploy --only functions:mtgApi --project robbchar-3db11

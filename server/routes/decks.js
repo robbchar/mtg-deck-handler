@@ -23,9 +23,9 @@ const router = Router();
  * Returns metadata for all decks (no card arrays).
  * Includes: id, name, format, notes, card_count, updated_at.
  */
-router.get('/', (_req, res) => {
+router.get('/', async (_req, res) => {
   try {
-    const decks = listDecks();
+    const decks = await listDecks();
     res.json(decks);
   } catch (err) {
     console.error('GET /api/decks error:', err);
@@ -37,9 +37,9 @@ router.get('/', (_req, res) => {
  * GET /api/decks/:id
  * Returns the full deck JSON for the given id.
  */
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const deck = getDeck(req.params.id);
+    const deck = await getDeck(req.params.id);
     res.json(deck);
   } catch (err) {
     if (err.message && err.message.startsWith('Deck not found')) {
@@ -54,9 +54,9 @@ router.get('/:id', (req, res) => {
  * POST /api/decks
  * Creates a new deck. Requires `name` in the request body.
  */
-router.post('/', validateDeckName, (req, res) => {
+router.post('/', validateDeckName, async (req, res) => {
   try {
-    const deck = createDeck({ ...req.body, name: req.body.name.trim() });
+    const deck = await createDeck({ ...req.body, name: req.body.name.trim() });
     res.status(201).json(deck);
   } catch (err) {
     console.error('POST /api/decks error:', err);
@@ -71,9 +71,9 @@ router.post('/', validateDeckName, (req, res) => {
  * GET /api/decks (which calls listDecks()) reads the updated file and
  * reflects the new notes/name/format in the list response.
  */
-router.put('/:id', validateDeckName, (req, res) => {
+router.put('/:id', validateDeckName, async (req, res) => {
   try {
-    const deck = updateDeck(req.params.id, req.body || {});
+    const deck = await updateDeck(req.params.id, req.body || {});
     res.json(deck);
   } catch (err) {
     if (err.message && err.message.startsWith('Deck not found')) {
@@ -87,9 +87,9 @@ router.put('/:id', validateDeckName, (req, res) => {
 /**
  * DELETE /api/decks/:id
  */
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const result = deleteDeck(req.params.id);
+    const result = await deleteDeck(req.params.id);
     res.json(result);
   } catch (err) {
     if (err.message && err.message.startsWith('Deck not found')) {

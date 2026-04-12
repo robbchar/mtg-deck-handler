@@ -1,5 +1,5 @@
 import { useContext, useEffect, useCallback } from 'react'
-import axios from 'axios'
+import client from '../api/client'
 import { DeckContext } from '../context/DeckContext'
 import type { Deck, DeckMetadata, CardEntry } from '../types'
 
@@ -48,7 +48,7 @@ export function useDecks() {
   const fetchDecks = useCallback(async () => {
     dispatch({ type: 'FETCH_START' })
     try {
-      const { data } = await axios.get<DeckMetadata[]>('/api/decks')
+      const { data } = await client.get<DeckMetadata[]>('/api/decks')
       dispatch({ type: 'FETCH_SUCCESS', payload: data })
     } catch (err) {
       dispatch({
@@ -64,7 +64,7 @@ export function useDecks() {
     const wrappedFetch = async () => {
       dispatch({ type: 'FETCH_START' })
       try {
-        const { data } = await axios.get<DeckMetadata[]>('/api/decks')
+        const { data } = await client.get<DeckMetadata[]>('/api/decks')
         if (!cancelled) dispatch({ type: 'FETCH_SUCCESS', payload: data })
       } catch (err) {
         if (!cancelled) {
@@ -111,7 +111,7 @@ export function useDecks() {
       dispatch({ type: 'ADD_DECK', payload: optimistic })
 
       try {
-        const { data: created } = await axios.post<DeckMetadata>('/api/decks', data)
+        const { data: created } = await client.post<DeckMetadata>('/api/decks', data)
         // Reducer locates tempId in current state and replaces — no stale closure.
         dispatch({
           type: 'REPLACE_TEMP_DECK',
@@ -148,7 +148,7 @@ export function useDecks() {
       dispatch({ type: 'UPDATE_DECK', payload: optimistic })
 
       try {
-        const { data: updated } = await axios.put<DeckMetadata>(`/api/decks/${id}`, data)
+        const { data: updated } = await client.put<DeckMetadata>(`/api/decks/${id}`, data)
         dispatch({ type: 'UPDATE_DECK', payload: updated })
         return updated
       } catch (err) {
@@ -179,7 +179,7 @@ export function useDecks() {
       dispatch({ type: 'REMOVE_DECK', payload: id })
 
       try {
-        await axios.delete(`/api/decks/${id}`)
+        await client.delete(`/api/decks/${id}`)
         return true
       } catch (err) {
         dispatch({ type: 'ROLLBACK_REMOVE', payload: previous })
@@ -204,7 +204,7 @@ export function useDecks() {
   const getDeck = useCallback(
     async (id: string): Promise<Deck | null> => {
       try {
-        const { data } = await axios.get<Deck>(`/api/decks/${id}`)
+        const { data } = await client.get<Deck>(`/api/decks/${id}`)
         return data
       } catch (err) {
         dispatch({

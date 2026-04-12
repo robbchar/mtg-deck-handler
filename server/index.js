@@ -1,26 +1,11 @@
 'use strict';
 
 const path = require('path');
-const fs = require('fs');
-
-// Load .env from the server directory regardless of the process CWD.
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const express = require('express');
 const cors = require('cors');
-
-// ── Ensure data directories exist at startup ──────────────────────────────────
-// DATA_DIR is resolved relative to this file so the path is correct no matter
-// where the process is started from. mkdirSync with { recursive: true } is a
-// no-op when the directory already exists, so this is safe to call every boot.
-const dataDir = path.resolve(__dirname, process.env.DATA_DIR || '../data');
-const decksDir = path.join(dataDir, 'decks');
-const cacheDir = path.join(dataDir, 'cache');
-const gamesDir = path.join(dataDir, 'games');
-
-fs.mkdirSync(decksDir, { recursive: true });
-fs.mkdirSync(cacheDir, { recursive: true });
-fs.mkdirSync(gamesDir, { recursive: true });
+const { requireAuth } = require('./middleware/auth');
 
 const app = express();
 
@@ -33,10 +18,10 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+// All API routes require a valid Firebase ID token
+app.use('/api', requireAuth);
+
 // ── API Routes ────────────────────────────────────────────────────────────────
-// Routes are loaded conditionally to allow incremental development — missing
-// stub files don't crash the server. Errors are logged with full stack traces
-// so that real problems (syntax errors, bad imports) are immediately visible.
 try {
   const deckRoutes = require('./routes/decks');
   app.use('/api/decks', deckRoutes);
@@ -78,7 +63,6 @@ const PORT = process.env.PORT || 3001;
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`MTG Deck Manager server running on http://localhost:${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/health`);
   });
 }
 

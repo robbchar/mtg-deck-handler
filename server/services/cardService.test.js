@@ -1,28 +1,22 @@
 'use strict';
 
-/**
- * Unit tests for cardService.
- *
- * Isolation strategy:
- *   - A fresh os.tmpdir() subdirectory is created before each test.
- *   - DATA_DIR is pointed at that directory before the module is required.
- *   - jest.resetModules() + jest.doMock() ensure a fresh module graph whose
- *     CACHE_DIR is resolved against the temp directory.
- *   - global.fetch is replaced with a jest.fn() so no real network calls fire.
- *   - The rate-limiter singleton is mocked to execute enqueued functions
- *     immediately (no artificial delays in tests).
- *   - The temp directory is removed after each test.
- */
+// ── Firestore mock ────────────────────────────────────────────────────────────
+const mockCacheDocRef = { get: jest.fn(), set: jest.fn() };
+const mockCacheCollRef = { doc: jest.fn(() => mockCacheDocRef) };
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+jest.mock('./db', () => ({
+  db: { collection: jest.fn(() => mockCacheCollRef) },
+}));
 
-let getCard, searchCards, getCacheAge;
-let mockScryfallLimiter;
-let tempDir;
+// Rate limiter mock — executes fn immediately (no artificial delay)
+jest.mock('../middleware/rateLimiter', () => ({
+  scryfallLimiter: { enqueue: jest.fn((fn) => fn()) },
+  RateLimiter: class MockRateLimiter {},
+}));
 
-// ── Fixtures ──────────────────────────────────────────────────────────────────
+const { getCard, searchCards, getCardBySetCollector, getCacheAge } = require('./cardService');
+const { db } = require('./db');
+const { scryfallLimiter } = require('../middleware/rateLimiter');
 
 const MOCK_CARD = {
   id: 'scryfall-abc-001',
@@ -36,18 +30,33 @@ const MOCK_CARD = {
 const MOCK_CARD_2 = {
   id: 'scryfall-def-002',
   name: 'Mountain',
-  mana_cost: null,
   type_line: 'Basic Land — Mountain',
-  oracle_text: '',
   set: 'lea',
 };
 
+// ── Snapshot helpers ──────────────────────────────────────────────────────────
+
+function freshCacheSnap(card) {
+  return {
+    exists: true,
+    data: () => ({ card, cached_at: new Date().toISOString() }),
+  };
+}
+
+function staleCacheSnap(card) {
+  return {
+    exists: true,
+    data: () => ({
+      card,
+      cached_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    }),
+  };
+}
+
+const missSnap = { exists: false };
+
 // ── Fetch mock helpers ────────────────────────────────────────────────────────
 
-/**
- * Configures global.fetch to return a successful 200 response with `body`.
- * @param {object} body
- */
 function mockFetchOk(body) {
   global.fetch = jest.fn().mockResolvedValue({
     status: 200,
@@ -56,14 +65,10 @@ function mockFetchOk(body) {
   });
 }
 
-/**
- * Configures global.fetch to return a response with the given non-ok status.
- * @param {number} status
- */
 function mockFetchStatus(status) {
   global.fetch = jest.fn().mockResolvedValue({
     status,
-    ok: status >= 200 && status < 300,
+    ok: false,
     json: () => Promise.resolve({ object: 'error', status }),
   });
 }
@@ -71,67 +76,45 @@ function mockFetchStatus(status) {
 // ── Test lifecycle ────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mtg-card-svc-test-'));
-  fs.mkdirSync(path.join(tempDir, 'cache'), { recursive: true });
-
-  process.env.DATA_DIR = tempDir;
-
-  jest.resetModules();
-
-  // Register rate-limiter mock AFTER resetModules so subsequent requires
-  // within this test get the mock. doMock is not hoisted, unlike jest.mock().
-  jest.doMock('../middleware/rateLimiter', () => {
-    const enqueue = jest.fn().mockImplementation((fn) => fn());
-    return {
-      scryfallLimiter: { enqueue },
-      RateLimiter: class MockRateLimiter {},
-    };
-  });
-
-  ({ getCard, searchCards, getCacheAge } = require('./cardService'));
-  mockScryfallLimiter = require('../middleware/rateLimiter').scryfallLimiter;
-
-  // Default to throwing so accidental fetch calls are obvious.
+  jest.clearAllMocks();
+  mockCacheCollRef.doc.mockReturnValue(mockCacheDocRef);
+  mockCacheDocRef.set.mockResolvedValue(undefined);
   global.fetch = jest.fn().mockRejectedValue(new Error('fetch called unexpectedly'));
 });
 
 afterEach(() => {
-  fs.rmSync(tempDir, { recursive: true, force: true });
-  delete process.env.DATA_DIR;
   delete global.fetch;
 });
 
 // ── getCacheAge ───────────────────────────────────────────────────────────────
 
 describe('getCacheAge()', () => {
-  it('returns null when the card has never been cached', () => {
-    expect(getCacheAge('uncached-id')).toBeNull();
+  it('returns null when the card has never been cached', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
+
+    const age = await getCacheAge('uncached-id');
+    expect(age).toBeNull();
   });
 
-  it('returns a non-negative number (ms) for a freshly-cached card', () => {
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    fs.writeFileSync(cacheFile, JSON.stringify(MOCK_CARD), 'utf8');
+  it('returns a non-negative number (ms) for a freshly-cached card', async () => {
+    mockCacheDocRef.get.mockResolvedValue(freshCacheSnap(MOCK_CARD));
 
-    const age = getCacheAge(MOCK_CARD.id);
+    const age = await getCacheAge(MOCK_CARD.id);
     expect(age).not.toBeNull();
     expect(age).toBeGreaterThanOrEqual(0);
-    expect(age).toBeLessThan(2000); // well within 2 seconds of creation
+    expect(age).toBeLessThan(2000);
   });
 
-  it('returns age close to 0 for a file written just now', () => {
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    fs.writeFileSync(cacheFile, JSON.stringify(MOCK_CARD), 'utf8');
-    expect(getCacheAge(MOCK_CARD.id)).toBeLessThan(500);
+  it('returns age close to 0 for a document written just now', async () => {
+    mockCacheDocRef.get.mockResolvedValue(freshCacheSnap(MOCK_CARD));
+
+    expect(await getCacheAge(MOCK_CARD.id)).toBeLessThan(500);
   });
 
-  it('returns a large age for an old cache file', () => {
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    fs.writeFileSync(cacheFile, JSON.stringify(MOCK_CARD), 'utf8');
+  it('returns a large age for a stale cache document', async () => {
+    mockCacheDocRef.get.mockResolvedValue(staleCacheSnap(MOCK_CARD));
 
-    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-    fs.utimesSync(cacheFile, eightDaysAgo, eightDaysAgo);
-
-    const age = getCacheAge(MOCK_CARD.id);
+    const age = await getCacheAge(MOCK_CARD.id);
     expect(age).toBeGreaterThan(7 * 24 * 60 * 60 * 1000);
   });
 });
@@ -139,9 +122,9 @@ describe('getCacheAge()', () => {
 // ── getCard — cache hits ──────────────────────────────────────────────────────
 
 describe('getCard() — cache-first behaviour', () => {
-  it('returns the cached card when the cache file is fresh', async () => {
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    fs.writeFileSync(cacheFile, JSON.stringify(MOCK_CARD), 'utf8');
+  it('returns the cached card when the Firestore document is fresh', async () => {
+    // getCacheAge get → fresh, then getCard's second get → card data
+    mockCacheDocRef.get.mockResolvedValue(freshCacheSnap(MOCK_CARD));
 
     const card = await getCard(MOCK_CARD.id);
 
@@ -152,17 +135,26 @@ describe('getCard() — cache-first behaviour', () => {
   it('second call for the same id does not hit the Scryfall API', async () => {
     mockFetchOk(MOCK_CARD);
 
-    // First call — cache miss, should fetch.
+    // First call: cache miss → fetch; second call: cache hit → no fetch.
+    // readCacheEntry does a single get(), so we need one snap per call.
+    mockCacheDocRef.get
+      .mockResolvedValueOnce(missSnap)                    // readCacheEntry → miss (1st call)
+      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD));  // readCacheEntry → hit (2nd call)
+
     await getCard(MOCK_CARD.id);
     expect(global.fetch).toHaveBeenCalledTimes(1);
 
-    // Second call — cache hit, must NOT fetch again.
     await getCard(MOCK_CARD.id);
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('returns equal data on cache-hit as on the original fetch', async () => {
     mockFetchOk(MOCK_CARD);
+
+    // readCacheEntry does a single get(), so one snap per call.
+    mockCacheDocRef.get
+      .mockResolvedValueOnce(missSnap)                   // readCacheEntry → miss (1st call)
+      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD)); // readCacheEntry → hit (2nd call)
 
     const firstResult = await getCard(MOCK_CARD.id);
     const secondResult = await getCard(MOCK_CARD.id);
@@ -174,7 +166,8 @@ describe('getCard() — cache-first behaviour', () => {
 // ── getCard — cache miss & persistence ───────────────────────────────────────
 
 describe('getCard() — fetching and caching', () => {
-  it('fetches from Scryfall when no cache file exists', async () => {
+  it('fetches from Scryfall when no cache document exists', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchOk(MOCK_CARD);
 
     const card = await getCard(MOCK_CARD.id);
@@ -186,35 +179,31 @@ describe('getCard() — fetching and caching', () => {
     expect(card).toEqual(MOCK_CARD);
   });
 
-  it('saves the fetched card to data/cache/{id}.json', async () => {
+  it('saves the fetched card to Firestore', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchOk(MOCK_CARD);
 
     await getCard(MOCK_CARD.id);
 
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    expect(fs.existsSync(cacheFile)).toBe(true);
-    const fromDisk = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-    expect(fromDisk).toEqual(MOCK_CARD);
+    expect(mockCacheDocRef.set).toHaveBeenCalledWith(
+      expect.objectContaining({ card: MOCK_CARD }),
+    );
   });
 
-  it('leaves no .tmp file after writing the cache', async () => {
+  it('persisted document includes a cached_at ISO timestamp', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchOk(MOCK_CARD);
 
     await getCard(MOCK_CARD.id);
 
-    const tmpFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json.tmp`);
-    expect(fs.existsSync(tmpFile)).toBe(false);
+    const [{ cached_at }] = mockCacheDocRef.set.mock.calls[0];
+    expect(typeof cached_at).toBe('string');
+    expect(() => new Date(cached_at)).not.toThrow();
   });
 
-  it('re-fetches when the cached file is stale (> 7 days)', async () => {
-    // Write an old cache file with identifiably different content.
+  it('re-fetches when the cached document is stale (> 7 days)', async () => {
     const staleCard = { ...MOCK_CARD, oracle_text: 'STALE TEXT' };
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    fs.writeFileSync(cacheFile, JSON.stringify(staleCard), 'utf8');
-
-    // Push mtime 8 days into the past.
-    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-    fs.utimesSync(cacheFile, eightDaysAgo, eightDaysAgo);
+    mockCacheDocRef.get.mockResolvedValue(staleCacheSnap(staleCard));
 
     const freshCard = { ...MOCK_CARD, oracle_text: 'FRESH TEXT' };
     mockFetchOk(freshCard);
@@ -226,12 +215,11 @@ describe('getCard() — fetching and caching', () => {
   });
 
   it('fresh cache just under 7 days does NOT trigger a re-fetch', async () => {
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    fs.writeFileSync(cacheFile, JSON.stringify(MOCK_CARD), 'utf8');
-
-    // 6 days, 23 hours, 59 minutes ago — still fresh.
     const justUnder7Days = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000 - 60_000));
-    fs.utimesSync(cacheFile, justUnder7Days, justUnder7Days);
+    mockCacheDocRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ card: MOCK_CARD, cached_at: justUnder7Days.toISOString() }),
+    });
 
     const card = await getCard(MOCK_CARD.id);
 
@@ -244,6 +232,7 @@ describe('getCard() — fetching and caching', () => {
 
 describe('getCard() — Scryfall error responses', () => {
   it('returns null for a 404 response without throwing', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchStatus(404);
 
     const result = await getCard('unknown-scryfall-id');
@@ -252,22 +241,24 @@ describe('getCard() — Scryfall error responses', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT create a cache file when Scryfall returns 404', async () => {
+  it('does NOT write to Firestore when Scryfall returns 404', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchStatus(404);
 
     await getCard('unknown-id');
 
-    const cacheFile = path.join(tempDir, 'cache', 'unknown-id.json');
-    expect(fs.existsSync(cacheFile)).toBe(false);
+    expect(mockCacheDocRef.set).not.toHaveBeenCalled();
   });
 
   it('throws for a 429 response', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchStatus(429);
 
     await expect(getCard(MOCK_CARD.id)).rejects.toThrow();
   });
 
   it('429 error has retryable = true', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchStatus(429);
 
     let caught;
@@ -282,6 +273,7 @@ describe('getCard() — Scryfall error responses', () => {
   });
 
   it('429 error has type = "RATE_LIMITED"', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchStatus(429);
 
     let caught;
@@ -295,6 +287,7 @@ describe('getCard() — Scryfall error responses', () => {
   });
 
   it('throws for other non-2xx responses (e.g. 500)', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchStatus(500);
 
     await expect(getCard(MOCK_CARD.id)).rejects.toThrow(/500/);
@@ -305,20 +298,20 @@ describe('getCard() — Scryfall error responses', () => {
 
 describe('getCard() — rate limiter', () => {
   it('routes the Scryfall fetch through the rate-limiter queue', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
     mockFetchOk(MOCK_CARD);
 
     await getCard(MOCK_CARD.id);
 
-    expect(mockScryfallLimiter.enqueue).toHaveBeenCalledTimes(1);
+    expect(scryfallLimiter.enqueue).toHaveBeenCalledTimes(1);
   });
 
   it('does NOT call the rate limiter on a cache hit', async () => {
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    fs.writeFileSync(cacheFile, JSON.stringify(MOCK_CARD), 'utf8');
+    mockCacheDocRef.get.mockResolvedValue(freshCacheSnap(MOCK_CARD));
 
     await getCard(MOCK_CARD.id);
 
-    expect(mockScryfallLimiter.enqueue).not.toHaveBeenCalled();
+    expect(scryfallLimiter.enqueue).not.toHaveBeenCalled();
   });
 });
 
@@ -364,23 +357,26 @@ describe('searchCards() — API call', () => {
 
     await searchCards('lightning');
 
-    expect(mockScryfallLimiter.enqueue).toHaveBeenCalledTimes(1);
+    expect(scryfallLimiter.enqueue).toHaveBeenCalledTimes(1);
   });
 });
 
 // ── searchCards — caching individual cards ────────────────────────────────────
 
 describe('searchCards() — individual card caching', () => {
-  it('caches each card result individually', async () => {
+  it('caches each card result individually in Firestore', async () => {
     mockFetchOk({ data: [MOCK_CARD, MOCK_CARD_2] });
 
     await searchCards('lightning OR mountain');
 
-    const cache1 = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    const cache2 = path.join(tempDir, 'cache', `${MOCK_CARD_2.id}.json`);
-
-    expect(fs.existsSync(cache1)).toBe(true);
-    expect(fs.existsSync(cache2)).toBe(true);
+    // set() should have been called once per card
+    expect(mockCacheDocRef.set).toHaveBeenCalledTimes(2);
+    expect(mockCacheDocRef.set).toHaveBeenCalledWith(
+      expect.objectContaining({ card: MOCK_CARD }),
+    );
+    expect(mockCacheDocRef.set).toHaveBeenCalledWith(
+      expect.objectContaining({ card: MOCK_CARD_2 }),
+    );
   });
 
   it('cached cards are retrievable by getCard() without another fetch', async () => {
@@ -388,40 +384,30 @@ describe('searchCards() — individual card caching', () => {
 
     await searchCards('lightning');
 
-    // Reset fetch mock to ensure a second network call would be detected.
+    // Now simulate cache hit for getCard()
     global.fetch = jest.fn().mockRejectedValue(new Error('should not call fetch'));
+    mockCacheDocRef.get.mockResolvedValue(freshCacheSnap(MOCK_CARD));
 
     const card = await getCard(MOCK_CARD.id);
     expect(card).toEqual(MOCK_CARD);
   });
 
-  it('written cache files are valid JSON and match the card object', async () => {
+  it('doc().set() is called with a valid cached_at timestamp', async () => {
     mockFetchOk({ data: [MOCK_CARD] });
 
     await searchCards('lightning');
 
-    const cacheFile = path.join(tempDir, 'cache', `${MOCK_CARD.id}.json`);
-    const fromDisk = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-    expect(fromDisk).toEqual(MOCK_CARD);
-  });
-
-  it('leaves no .tmp files after caching search results', async () => {
-    mockFetchOk({ data: [MOCK_CARD, MOCK_CARD_2] });
-
-    await searchCards('basic');
-
-    for (const card of [MOCK_CARD, MOCK_CARD_2]) {
-      const tmp = path.join(tempDir, 'cache', `${card.id}.json.tmp`);
-      expect(fs.existsSync(tmp)).toBe(false);
-    }
+    const [{ cached_at }] = mockCacheDocRef.set.mock.calls[0];
+    expect(typeof cached_at).toBe('string');
+    expect(() => new Date(cached_at)).not.toThrow();
   });
 
   it('skips caching cards that have no id field', async () => {
     const cardWithoutId = { name: 'Mystery Card', mana_cost: '{B}' };
     mockFetchOk({ data: [cardWithoutId] });
 
-    // Should not throw even though card has no id.
     await expect(searchCards('mystery')).resolves.not.toThrow();
+    expect(mockCacheDocRef.set).not.toHaveBeenCalled();
   });
 });
 
@@ -484,5 +470,98 @@ describe('searchCards() — Scryfall error responses', () => {
 
     const results = await searchCards('bolt');
     expect(results).toEqual([]);
+  });
+});
+
+// ── getCardBySetCollector ─────────────────────────────────────────────────────
+
+describe('getCardBySetCollector()', () => {
+  it('returns the cached card when the set+collector key is fresh', async () => {
+    mockCacheDocRef.get.mockResolvedValue(freshCacheSnap(MOCK_CARD));
+
+    const card = await getCardBySetCollector('LEA', '1');
+
+    expect(card).toEqual(MOCK_CARD);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches from Scryfall when set+collector key is missing', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
+    mockFetchOk(MOCK_CARD);
+
+    const card = await getCardBySetCollector('LEA', '1');
+
+    expect(card).toEqual(MOCK_CARD);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/cards/lea/1'),
+    );
+  });
+
+  it('re-fetches when the set+collector cache entry is stale', async () => {
+    const staleCard = { ...MOCK_CARD, oracle_text: 'STALE' };
+    mockCacheDocRef.get.mockResolvedValue(staleCacheSnap(staleCard));
+
+    const freshCard = { ...MOCK_CARD, oracle_text: 'FRESH' };
+    mockFetchOk(freshCard);
+
+    const card = await getCardBySetCollector('LEA', '1');
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(card.oracle_text).toBe('FRESH');
+  });
+
+  it('writes two Firestore documents: one by UUID, one by set+collector key', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
+    mockFetchOk(MOCK_CARD);
+
+    await getCardBySetCollector('LEA', '1');
+
+    expect(mockCacheDocRef.set).toHaveBeenCalledTimes(2);
+    expect(mockCacheCollRef.doc).toHaveBeenCalledWith(MOCK_CARD.id);
+    expect(mockCacheCollRef.doc).toHaveBeenCalledWith('set_lea_1');
+  });
+
+  it('returns null for a 404 response without throwing', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
+    mockFetchStatus(404);
+
+    const result = await getCardBySetCollector('LEA', '999');
+
+    expect(result).toBeNull();
+    expect(mockCacheDocRef.set).not.toHaveBeenCalled();
+  });
+
+  it('throws for a 429 response with retryable = true', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
+    mockFetchStatus(429);
+
+    let caught;
+    try {
+      await getCardBySetCollector('LEA', '1');
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeDefined();
+    expect(caught.retryable).toBe(true);
+    expect(caught.type).toBe('RATE_LIMITED');
+  });
+
+  it('throws for other non-2xx responses', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
+    mockFetchStatus(500);
+
+    await expect(getCardBySetCollector('LEA', '1')).rejects.toThrow(/500/);
+  });
+
+  it('lowercases the set code in both the URL and cache key', async () => {
+    mockCacheDocRef.get.mockResolvedValue(missSnap);
+    mockFetchOk(MOCK_CARD);
+
+    await getCardBySetCollector('LEA', '1');
+
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/cards/lea/1'));
+    expect(mockCacheCollRef.doc).toHaveBeenCalledWith('set_lea_1');
   });
 });

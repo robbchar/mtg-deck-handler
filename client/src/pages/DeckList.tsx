@@ -4,6 +4,7 @@ import { useDecks } from '../hooks/useDecks'
 import { useToastContext } from '../context/ToastContext'
 import DeckCard from '../components/DeckCard'
 import ImportModal from '../components/ImportModal'
+import UserAvatar from '../components/UserAvatar'
 
 /**
  * DeckList page — rendered at the / route.
@@ -67,6 +68,8 @@ function DeckList() {
           >
             + New Deck
           </button>
+
+          <UserAvatar />
         </div>
       </header>
 
