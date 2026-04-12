@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "install:all": "npm install",
-    "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
+    "dev": "concurrently \"firebase emulators:start --only auth,firestore,functions\" \"npm run dev --workspace=client\"",
+    "dev:server": "npm run dev --workspace=server",
     "start": "node server/index.js",
     "test": "npm run test:server && npm run test:client",
     "test:server": "npm run test --workspace=server",
