@@ -21,6 +21,7 @@ jest.mock('./db', () => ({
   db: { collection: jest.fn(() => mockDeckCollRef) },
 }));
 
+const { db } = require('./db');
 const { getGames, addGame, removeGame } = require('./gameService');
 
 const DECK_ID = 'deck-abc';
@@ -59,6 +60,9 @@ describe('getGames(deckId)', () => {
     mockOrderByRef.get.mockResolvedValue({ docs: [] });
     await getGames(DECK_ID);
     expect(mockGamesRef.orderBy).toHaveBeenCalledWith('logged_at', 'desc');
+    expect(db.collection).toHaveBeenCalledWith('mtg-deck-handler');
+    expect(mockDeckCollRef.doc).toHaveBeenCalledWith(DECK_ID);
+    expect(mockDeckDocRef.collection).toHaveBeenCalledWith('games');
   });
 });
 
@@ -85,8 +89,40 @@ describe('addGame(deckId, gameData)', () => {
     const entry = await addGame(DECK_ID, { result: 'loss' });
     expect(entry.turn_ended).toBeNull();
     expect(entry.opponent_colors).toEqual([]);
+    expect(entry.opponent_archetype).toBeNull();
+    expect(entry.opening_hand_feel).toBeNull();
     expect(entry.cards_in_hand).toEqual([]);
+    expect(entry.tough_opponent_card).toBe('');
+    expect(entry.notes).toBe('');
     expect(entry.mtga_rank).toBeNull();
+  });
+
+  it('passes all provided fields through to Firestore add()', async () => {
+    mockGamesRef.add.mockResolvedValue({ id: 'x' });
+    await addGame(DECK_ID, {
+      result: 'win',
+      turn_ended: 6,
+      opponent_colors: ['R', 'G'],
+      opponent_archetype: 'aggro',
+      opening_hand_feel: 'good',
+      cards_in_hand: ['Lightning Bolt'],
+      tough_opponent_card: 'Counterspell',
+      notes: 'close game',
+      mtga_rank: 'Gold',
+    });
+    expect(mockGamesRef.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: 'win',
+        turn_ended: 6,
+        opponent_colors: ['R', 'G'],
+        opponent_archetype: 'aggro',
+        opening_hand_feel: 'good',
+        cards_in_hand: ['Lightning Bolt'],
+        tough_opponent_card: 'Counterspell',
+        notes: 'close game',
+        mtga_rank: 'Gold',
+      }),
+    );
   });
 
   it('stores the entry in Firestore via collection().add()', async () => {

@@ -51,10 +51,7 @@ router.delete('/:gameId', async (req, res) => {
     const result = await removeGame(req.params.id, req.params.gameId);
     res.json(result);
   } catch (err) {
-    if (err.message && (
-      err.message.startsWith('Game log not found') ||
-      err.message.startsWith('Game not found')
-    )) {
+    if (err.message && err.message.startsWith('Game not found')) {
       return res.status(404).json({ error: err.message });
     }
     console.error('DELETE /api/decks/:id/games/:gameId error:', err);
