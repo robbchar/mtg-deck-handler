@@ -26,9 +26,9 @@ const router = Router();
  * @returns {404} { error: string }
  * @returns {500} { error: string }
  */
-router.post('/decks/:id/export', (req, res) => {
+router.post('/decks/:id/export', async (req, res) => {
   try {
-    const deck = getDeck(req.params.id);
+    const deck = await getDeck(req.params.id);
     const text = exportDeck(deck);
     res.json({ text });
   } catch (err) {
@@ -131,7 +131,7 @@ router.post('/import', validateImport, async (req, res) => {
       .filter((c) => !c.scryfall_id)
       .map((c) => c.name);
 
-    const deck = createDeck({
+    const deck = await createDeck({
       name: name.trim(),
       format: typeof format === 'string' ? format.trim() : '',
       cards,

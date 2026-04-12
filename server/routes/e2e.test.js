@@ -98,7 +98,7 @@ describe('E2E: POST /api/import', () => {
       unknown: ['Lightning Bolt', 'Mountain'],
     });
     const created = { id: 'import-1', name: 'Bolt Mountain', format: 'Standard', cards: [{ name: 'Lightning Bolt', quantity: 4 }, { name: 'Mountain', quantity: 8 }], sideboard: [], unknown: ['Lightning Bolt', 'Mountain'] };
-    deckService.createDeck.mockReturnValue(created);
+    deckService.createDeck.mockResolvedValue(created);
 
     const res = await request(app)
       .post('/api/import')
