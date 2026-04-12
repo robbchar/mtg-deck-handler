@@ -40,7 +40,7 @@ beforeEach(() => {
     getCard: jest.fn().mockResolvedValue(null),
     searchCards: jest.fn().mockResolvedValue([]),
     getCardBySetCollector: jest.fn().mockResolvedValue(null),
-    getCacheAge: jest.fn().mockReturnValue(null),
+    getCacheAge: jest.fn().mockResolvedValue(null),
   }));
 
   // Correct relative path: e2e.test.js lives in server/routes/, index.js in server/

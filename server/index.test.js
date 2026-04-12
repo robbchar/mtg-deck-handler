@@ -27,7 +27,7 @@ jest.mock('./services/mtgaService', () => ({
 jest.mock('./services/cardService', () => ({
   getCard: jest.fn().mockResolvedValue(null),
   searchCards: jest.fn().mockResolvedValue([]),
-  getCacheAge: jest.fn().mockReturnValue(null),
+  getCacheAge: jest.fn().mockResolvedValue(null),
 }));
 
 const app = require('./index');

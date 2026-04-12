@@ -136,10 +136,10 @@ describe('getCard() — cache-first behaviour', () => {
     mockFetchOk(MOCK_CARD);
 
     // First call: cache miss → fetch; second call: cache hit → no fetch.
+    // readCacheEntry does a single get(), so we need one snap per call.
     mockCacheDocRef.get
-      .mockResolvedValueOnce(missSnap)           // getCacheAge → miss
-      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD)) // getCacheAge → hit
-      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD)); // getCard snap.data()
+      .mockResolvedValueOnce(missSnap)                    // readCacheEntry → miss (1st call)
+      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD));  // readCacheEntry → hit (2nd call)
 
     await getCard(MOCK_CARD.id);
     expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -151,10 +151,10 @@ describe('getCard() — cache-first behaviour', () => {
   it('returns equal data on cache-hit as on the original fetch', async () => {
     mockFetchOk(MOCK_CARD);
 
+    // readCacheEntry does a single get(), so one snap per call.
     mockCacheDocRef.get
-      .mockResolvedValueOnce(missSnap)
-      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD))
-      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD));
+      .mockResolvedValueOnce(missSnap)                   // readCacheEntry → miss (1st call)
+      .mockResolvedValueOnce(freshCacheSnap(MOCK_CARD)); // readCacheEntry → hit (2nd call)
 
     const firstResult = await getCard(MOCK_CARD.id);
     const secondResult = await getCard(MOCK_CARD.id);

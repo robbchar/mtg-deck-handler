@@ -54,6 +54,21 @@ async function getCacheAge(cacheKey) {
 }
 
 /**
+ * Reads a cache entry and returns the card if fresh, null otherwise.
+ * Single Firestore read — avoids the double-read pattern.
+ * @param {string} cacheKey
+ * @returns {Promise<object|null>}
+ */
+async function readCacheEntry(cacheKey) {
+  const snap = await db.collection(CACHE_COLLECTION).doc(cacheKey).get();
+  if (!snap.exists) return null;
+  const data = snap.data();
+  if (!data || !data.card) return null;
+  const age = Math.max(0, Date.now() - new Date(data.cached_at).getTime());
+  return age < CACHE_TTL_MS ? data.card : null;
+}
+
+/**
  * Returns a Scryfall card object by its UUID using a cache-first strategy.
  *
  * Flow:
@@ -71,11 +86,8 @@ async function getCacheAge(cacheKey) {
  * @returns {Promise<object|null>} Scryfall card object, or `null` if not found.
  */
 async function getCard(scryfallId) {
-  const age = await getCacheAge(scryfallId);
-  if (age !== null && age < CACHE_TTL_MS) {
-    const snap = await db.collection(CACHE_COLLECTION).doc(scryfallId).get();
-    return snap.data().card;
-  }
+  const cachedCard = await readCacheEntry(scryfallId);
+  if (cachedCard !== null) return cachedCard;
 
   const card = await scryfallLimiter.enqueue(async () => {
     const response = await fetch(`${SCRYFALL_BASE}/cards/${scryfallId}`);
@@ -138,11 +150,13 @@ async function searchCards(query) {
   const cards = responseData.data || [];
 
   // Cache each card individually for future getCard() cache hits.
-  for (const card of cards) {
-    if (card && card.id) {
-      await db.collection(CACHE_COLLECTION).doc(card.id).set({ card, cached_at: new Date().toISOString() });
-    }
-  }
+  await Promise.all(
+    cards
+      .filter((card) => card && card.id)
+      .map((card) =>
+        db.collection(CACHE_COLLECTION).doc(card.id).set({ card, cached_at: new Date().toISOString() })
+      )
+  );
 
   return cards;
 }
@@ -163,11 +177,8 @@ async function searchCards(query) {
 async function getCardBySetCollector(setCode, collectorNumber) {
   const cacheKey = `set_${setCode.toLowerCase()}_${collectorNumber}`;
 
-  const age = await getCacheAge(cacheKey);
-  if (age !== null && age < CACHE_TTL_MS) {
-    const snap = await db.collection(CACHE_COLLECTION).doc(cacheKey).get();
-    return snap.data().card;
-  }
+  const cachedCard = await readCacheEntry(cacheKey);
+  if (cachedCard !== null) return cachedCard;
 
   const card = await scryfallLimiter.enqueue(async () => {
     const response = await fetch(
@@ -182,10 +193,13 @@ async function getCardBySetCollector(setCode, collectorNumber) {
   });
 
   if (card !== null) {
-    // Cache by UUID so future getCard() calls are served from Firestore.
-    await db.collection(CACHE_COLLECTION).doc(card.id).set({ card, cached_at: new Date().toISOString() });
-    // Cache by set+collector for repeat imports without a UUID.
-    await db.collection(CACHE_COLLECTION).doc(cacheKey).set({ card, cached_at: new Date().toISOString() });
+    const now = new Date().toISOString();
+    await Promise.all([
+      // Cache by UUID so future getCard() calls are served from Firestore.
+      db.collection(CACHE_COLLECTION).doc(card.id).set({ card, cached_at: now }),
+      // Cache by set+collector for repeat imports without a UUID.
+      db.collection(CACHE_COLLECTION).doc(cacheKey).set({ card, cached_at: now }),
+    ]);
   }
 
   return card;
