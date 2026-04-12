@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { vi, beforeEach } from 'vitest'
 import { AuthProvider, useAuth } from './AuthContext'
 
@@ -19,9 +20,15 @@ vi.mock('firebase/auth', () => ({
 vi.mock('../firebase', () => ({ auth: {} }))
 
 function TestConsumer() {
-  const { user, loading } = useAuth()
+  const { user, loading, signIn, signOut } = useAuth()
   if (loading) return <div>loading</div>
-  return <div>{user ? `user:${user.email}` : 'no-user'}</div>
+  return (
+    <div>
+      <div>{user ? `user:${user.email}` : 'no-user'}</div>
+      <button onClick={signIn}>sign-in</button>
+      <button onClick={signOut}>sign-out</button>
+    </div>
+  )
 }
 
 beforeEach(() => {
@@ -55,5 +62,29 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(screen.getByText('no-user')).toBeInTheDocument()
     })
+  })
+
+  it('calls signInWithPopup when signIn is invoked', async () => {
+    mockOnAuthStateChanged.mockImplementation((_auth: unknown, callback: (user: null) => void) => {
+      callback(null)
+      return () => {}
+    })
+    mockSignInWithPopup.mockResolvedValue({})
+    render(<AuthProvider><TestConsumer /></AuthProvider>)
+    await waitFor(() => screen.getByText('sign-in'))
+    await userEvent.click(screen.getByText('sign-in'))
+    expect(mockSignInWithPopup).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls signOut when signOut is invoked', async () => {
+    mockOnAuthStateChanged.mockImplementation((_auth: unknown, callback: (user: null) => void) => {
+      callback(null)
+      return () => {}
+    })
+    mockSignOut.mockResolvedValue(undefined)
+    render(<AuthProvider><TestConsumer /></AuthProvider>)
+    await waitFor(() => screen.getByText('sign-out'))
+    await userEvent.click(screen.getByText('sign-out'))
+    expect(mockSignOut).toHaveBeenCalledTimes(1)
   })
 })

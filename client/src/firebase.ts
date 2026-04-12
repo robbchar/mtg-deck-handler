@@ -1,8 +1,11 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 
+const apiKey = import.meta.env.VITE_FIREBASE_API_KEY
+if (!apiKey) throw new Error('VITE_FIREBASE_API_KEY is required — set it in your .env file')
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'placeholder-replace-with-actual',
+  apiKey,
   authDomain: 'robbchar-3db11.firebaseapp.com',
   projectId: 'robbchar-3db11',
   storageBucket: 'robbchar-3db11.appspot.com',
