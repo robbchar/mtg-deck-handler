@@ -1,81 +1,36 @@
 'use strict';
 
-/**
- * Game Service — file I/O for per-deck game log JSON files.
- *
- * Each deck's game log is stored at `/data/games/{deck-id}.json`.
- * All writes use the same atomic tmp-then-rename pattern as deckService.
- */
+const { db } = require('./db');
 
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+const DECK_COLLECTION = 'mtg-deck-handler';
+const GAMES_SUBCOLLECTION = 'games';
 
-const dataDir = path.resolve(__dirname, '..', process.env.DATA_DIR || '../data');
-const GAMES_DIR = path.join(dataDir, 'games');
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function gamesPath(deckId) {
-  return path.join(GAMES_DIR, `${deckId}.json`);
+function gamesRef(deckId) {
+  return db.collection(DECK_COLLECTION).doc(deckId).collection(GAMES_SUBCOLLECTION);
 }
-
-function atomicWrite(filePath, data) {
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-  fs.renameSync(tmp, filePath);
-}
-
-/**
- * Reads the game log file for a deck. Returns the parsed object, or null if
- * the file does not exist yet.
- *
- * @param {string} deckId
- * @returns {{ deck_id: string, games: object[] } | null}
- */
-function readLog(deckId) {
-  const filePath = gamesPath(deckId);
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-// ── Public API ────────────────────────────────────────────────────────────────
 
 /**
  * Returns all logged games for a deck, newest first.
- * Returns an empty array if no game log exists yet.
- *
  * @param {string} deckId
- * @returns {object[]}
+ * @returns {Promise<object[]>}
  */
-function getGames(deckId) {
-  const log = readLog(deckId);
-  if (!log) return [];
-  return [...log.games].reverse();
+async function getGames(deckId) {
+  const snapshot = await gamesRef(deckId).orderBy('logged_at', 'desc').get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
 /**
- * Appends a new game entry to the deck's game log.
- * Creates the log file if it does not exist.
- * Enforces that `result` is present; all other fields are optional.
- *
+ * Appends a new game entry and returns it.
  * @param {string} deckId
- * @param {object} gameData - Fields for the new game entry
- * @returns {object} The newly created game entry
- * @throws {Error} When `result` is missing or invalid
+ * @param {object} gameData
+ * @returns {Promise<object>}
  */
-function addGame(deckId, gameData) {
+async function addGame(deckId, gameData) {
   if (!gameData.result || !['win', 'loss'].includes(gameData.result)) {
     throw new Error('result is required and must be "win" or "loss"');
   }
 
-  fs.mkdirSync(GAMES_DIR, { recursive: true });
-
-  const existing = readLog(deckId);
-  const log = existing ?? { deck_id: deckId, games: [] };
-
   const entry = {
-    id: uuidv4(),
     logged_at: new Date().toISOString(),
     result: gameData.result,
     turn_ended: gameData.turn_ended ?? null,
@@ -85,33 +40,24 @@ function addGame(deckId, gameData) {
     cards_in_hand: gameData.cards_in_hand ?? [],
     tough_opponent_card: gameData.tough_opponent_card ?? '',
     notes: gameData.notes ?? '',
+    mtga_rank: gameData.mtga_rank ?? null,
   };
 
-  log.games.push(entry);
-  atomicWrite(gamesPath(deckId), log);
-
-  return entry;
+  const docRef = await gamesRef(deckId).add(entry);
+  return { id: docRef.id, ...entry };
 }
 
 /**
- * Removes a single game entry by id from the deck's game log.
- *
+ * Removes a single game entry by id.
  * @param {string} deckId
  * @param {string} gameId
- * @returns {{ deleted: true }}
- * @throws {Error} When the log file or the game entry does not exist
+ * @returns {Promise<{ deleted: true }>}
  */
-function removeGame(deckId, gameId) {
-  const log = readLog(deckId);
-
-  if (!log) throw new Error(`Game log not found for deck: ${deckId}`);
-
-  const index = log.games.findIndex((g) => g.id === gameId);
-  if (index === -1) throw new Error(`Game not found: ${gameId}`);
-
-  log.games.splice(index, 1);
-  atomicWrite(gamesPath(deckId), log);
-
+async function removeGame(deckId, gameId) {
+  const docRef = gamesRef(deckId).doc(gameId);
+  const snap = await docRef.get();
+  if (!snap.exists) throw new Error(`Game not found: ${gameId}`);
+  await docRef.delete();
   return { deleted: true };
 }
 
