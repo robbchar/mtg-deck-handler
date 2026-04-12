@@ -14,9 +14,9 @@
     "test": "npm run test:server && npm run test:client",
     "test:server": "npm run test --workspace=server",
     "test:client": "npm run test --workspace=client",
-    "deploy:hosting": "npm run build --workspace=client && firebase deploy --only hosting --project robbchar-3db11",
+    "deploy:hosting": "npm run build --workspace=client && firebase deploy --only hosting:mtg-deck-handler --project robbchar-3db11",
     "deploy:functions": "firebase deploy --only functions:mtgApi --project robbchar-3db11",
-    "deploy": "npm run build --workspace=client && firebase deploy --only hosting,functions:mtgApi --project robbchar-3db11"
+    "deploy": "npm run build --workspace=client && firebase deploy --only hosting:mtg-deck-handler,functions:mtgApi --project robbchar-3db11"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

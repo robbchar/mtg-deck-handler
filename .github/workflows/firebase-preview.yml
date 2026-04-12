@@ -38,4 +38,5 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ROBBCHAR_3DB11 }}
           projectId: robbchar-3db11
+          target: mtg-deck-handler
           # No channelId = auto-generated preview channel per PR
