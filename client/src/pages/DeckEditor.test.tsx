@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import axios from 'axios'
+import client from '../api/client'
 import DeckEditor from './DeckEditor'
 import { useDecks } from '../hooks/useDecks'
 import { useCards } from '../hooks/useCards'
@@ -20,22 +20,14 @@ vi.mock('../hooks/useCards')
 vi.mock('../hooks/useGames', () => ({
   useGames: () => ({ games: [], loading: false, error: null, addGame: vi.fn(), refetch: vi.fn() }),
 }))
-vi.mock('axios', () => ({
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}))
 
 const mockedUseDecks = vi.mocked(useDecks)
 const mockedUseCards = vi.mocked(useCards)
-const mockedAxios = {
-  get: vi.mocked(axios.get),
-  post: vi.mocked(axios.post),
-  put: vi.mocked(axios.put),
-  delete: vi.mocked(axios.delete),
+const mockedClient = {
+  get: vi.mocked(client.get),
+  post: vi.mocked(client.post),
+  put: vi.mocked(client.put),
+  delete: vi.mocked(client.delete),
 }
 
 const mockNavigate = vi.fn()
@@ -423,7 +415,7 @@ describe('DeckEditor — Export button', () => {
   })
 
   it('calls the export API and writes to clipboard when clicked', async () => {
-    mockedAxios.post.mockResolvedValueOnce({ data: { text: '4 Lightning Bolt\n2 Mountain' } })
+    mockedClient.post.mockResolvedValueOnce({ data: { text: '4 Lightning Bolt\n2 Mountain' } })
 
     renderEditor()
     await waitFor(() => screen.getByTestId('export-btn'))

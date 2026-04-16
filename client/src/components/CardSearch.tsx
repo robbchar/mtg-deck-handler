@@ -3,6 +3,7 @@ import CloseButton from './CloseButton'
 import Spinner from './Spinner'
 import CardResultItem from './CardResultItem'
 import CardDetailModal from './CardDetailModal'
+import { useCards } from '../hooks/useCards'
 import type { ScryfallCard } from '../types'
 
 interface CardSearchProps {
@@ -28,11 +29,10 @@ interface CardSearchProps {
 function CardSearch({ sectionNames, onAddToSection, isOpen = true, onClose }: CardSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ScryfallCard[]>([])
-  const [searching, setSearching] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   /** True once at least one search has resolved, to enable "no results" state. */
   const [hasSearched, setHasSearched] = useState(false)
   const [detailCard, setDetailCard] = useState<ScryfallCard | null>(null)
+  const { searchCards, searching, error } = useCards()
 
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -44,7 +44,6 @@ function CardSearch({ sectionNames, onAddToSection, isOpen = true, onClose }: Ca
     } else {
       setQuery('')
       setResults([])
-      setError(null)
       setHasSearched(false)
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
@@ -70,25 +69,13 @@ function CardSearch({ sectionNames, onAddToSection, isOpen = true, onClose }: Ca
   const runSearch = useCallback(async (value: string) => {
     if (!value.trim()) {
       setResults([])
-      setError(null)
       setHasSearched(false)
       return
     }
-    setSearching(true)
-    setError(null)
-    try {
-      const response = await fetch(`/api/cards/search?q=${encodeURIComponent(value.trim())}`)
-      if (!response.ok) throw new Error('Search failed')
-      const data = await response.json() as ScryfallCard[]
-      setResults(Array.isArray(data) ? data : [])
-    } catch {
-      setError('Search failed')
-      setResults([])
-    } finally {
-      setSearching(false)
-      setHasSearched(true)
-    }
-  }, [])
+    const data = await searchCards(value.trim())
+    setResults(data)
+    setHasSearched(true)
+  }, [searchCards])
 
   // ── Debounced search on input change ──────────────────────────────────────
   const handleQueryChange = useCallback(
