@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import axios from 'axios'
+import client from '../api/client'
 import { useDecks } from '../hooks/useDecks'
 import { useGames } from '../hooks/useGames'
 import { useToastContext } from '../context/ToastContext'
@@ -279,7 +279,7 @@ function DeckEditor() {
   async function handleExport() {
     try {
       // Primary: use the server-side export endpoint for consistent formatting.
-      const { data } = await axios.post<{ text?: string }>(`/api/decks/${id}/export`)
+      const { data } = await client.post<{ text?: string }>(`/api/decks/${id}/export`)
       await navigator.clipboard.writeText(data.text ?? buildMtgaText(mainboard, sideboard))
       setExportStatus('copied')
       setTimeout(() => setExportStatus('idle'), 2000)

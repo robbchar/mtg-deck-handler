@@ -4,6 +4,21 @@ import CardSearch from './CardSearch'
 import type { ScryfallCard } from '../types'
 
 // ---------------------------------------------------------------------------
+// Mock useCards
+// ---------------------------------------------------------------------------
+
+const mockState = {
+  searchCards: vi.fn<[string], Promise<ScryfallCard[]>>(),
+  getCard: vi.fn(),
+  searching: false,
+  error: null as string | null,
+}
+
+vi.mock('../hooks/useCards', () => ({
+  useCards: () => mockState,
+}))
+
+// ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
@@ -63,18 +78,14 @@ const CARD_DFC: ScryfallCard = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const mockFetch = vi.fn()
-
 beforeEach(() => {
   vi.resetAllMocks()
-  global.fetch = mockFetch
+  mockState.error = null
+  mockState.searching = false
 })
 
 function mockSearchResults(cards: ScryfallCard[]) {
-  mockFetch.mockResolvedValueOnce({
-    ok: true,
-    json: async () => cards,
-  } as unknown as Response)
+  mockState.searchCards.mockResolvedValueOnce(cards)
 }
 
 async function renderAndSearch(cards: ScryfallCard[]) {
@@ -109,8 +120,11 @@ describe('CardSearch', () => {
     expect(screen.getByText('Counterspell')).toBeInTheDocument()
   })
 
-  it('shows an error message when the fetch fails', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false } as Response)
+  it('shows an error message when the search fails', async () => {
+    mockState.searchCards.mockImplementation(async () => {
+      mockState.error = 'Failed to search cards'
+      return []
+    })
     render(<CardSearch sectionNames={[]} onAddToSection={vi.fn()} />)
     const input = screen.getByRole('searchbox')
     fireEvent.change(input, { target: { value: 'bolt' } })
