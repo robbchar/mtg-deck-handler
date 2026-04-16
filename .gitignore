@@ -31,3 +31,4 @@ npm-debug.log*
 .claude/
 # Visual brainstorming companion
 .superpowers/
+.worktrees/
