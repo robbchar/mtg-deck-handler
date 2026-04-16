@@ -1,9 +1,11 @@
 'use strict';
 
 /**
- * Deck API routes — CRUD operations backed by deckService file I/O.
+ * Deck API routes — CRUD operations backed by deckService.
  *
  * Mounted at /api/decks in index.js.
+ * All routes require a valid Firebase ID token (enforced by requireAuth middleware).
+ * Deck ownership is scoped to req.user.uid.
  */
 
 const { Router } = require('express');
@@ -20,12 +22,12 @@ const router = Router();
 
 /**
  * GET /api/decks
- * Returns metadata for all decks (no card arrays).
+ * Returns metadata for all decks owned by the authenticated user.
  * Includes: id, name, format, notes, card_count, updated_at.
  */
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const decks = await listDecks();
+    const decks = await listDecks(req.user.uid);
     res.json(decks);
   } catch (err) {
     console.error('GET /api/decks error:', err);
@@ -52,11 +54,16 @@ router.get('/:id', async (req, res) => {
 
 /**
  * POST /api/decks
- * Creates a new deck. Requires `name` in the request body.
+ * Creates a new deck owned by the authenticated user.
+ * Requires `name` in the request body.
  */
 router.post('/', validateDeckName, async (req, res) => {
   try {
-    const deck = await createDeck({ ...req.body, name: req.body.name.trim() });
+    const deck = await createDeck({
+      ...req.body,
+      name: req.body.name.trim(),
+      userId: req.user.uid,
+    });
     res.status(201).json(deck);
   } catch (err) {
     console.error('POST /api/decks error:', err);
@@ -66,10 +73,7 @@ router.post('/', validateDeckName, async (req, res) => {
 
 /**
  * PUT /api/decks/:id
- * Merges the request body into the existing deck via updateDeck().
- * updateDeck() writes the result atomically to disk; a subsequent
- * GET /api/decks (which calls listDecks()) reads the updated file and
- * reflects the new notes/name/format in the list response.
+ * Merges the request body into the existing deck.
  */
 router.put('/:id', validateDeckName, async (req, res) => {
   try {

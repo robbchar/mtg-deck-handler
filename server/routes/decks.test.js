@@ -52,6 +52,12 @@ describe('GET /api/decks', () => {
     expect(res.body).toEqual(MOCK_META);
   });
 
+  it('calls listDecks with the authenticated user uid', async () => {
+    deckService.listDecks.mockReturnValue(MOCK_META);
+    await request(app).get('/api/decks');
+    expect(deckService.listDecks).toHaveBeenCalledWith('test-uid');
+  });
+
   it('returns an empty array when no decks exist', async () => {
     deckService.listDecks.mockReturnValue([]);
     const res = await request(app).get('/api/decks');
@@ -108,10 +114,12 @@ describe('POST /api/decks', () => {
     expect(res.body).toEqual(MOCK_DECK);
   });
 
-  it('passes trimmed name to createDeck', async () => {
+  it('passes trimmed name and userId to createDeck', async () => {
     deckService.createDeck.mockReturnValue(MOCK_DECK);
     await request(app).post('/api/decks').send({ name: '  Mono Red  ' });
-    expect(deckService.createDeck).toHaveBeenCalledWith(expect.objectContaining({ name: 'Mono Red' }));
+    expect(deckService.createDeck).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Mono Red', userId: 'test-uid' }),
+    );
   });
 
   it('returns 400 when name is missing', async () => {
