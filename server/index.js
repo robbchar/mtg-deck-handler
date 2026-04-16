@@ -50,6 +50,13 @@ try {
   console.error('Optional route not loaded (routes/games):', err.stack);
 }
 
+try {
+  const snapshotRoutes = require('./routes/snapshots');
+  app.use('/api/decks/:id/snapshots', snapshotRoutes);
+} catch (err) {
+  console.error('Optional route not loaded (routes/snapshots):', err.stack);
+}
+
 // ── Global error handler ──────────────────────────────────────────────────────
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
