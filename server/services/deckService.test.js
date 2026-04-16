@@ -1,15 +1,15 @@
 'use strict';
 
 // ── Firestore mock ────────────────────────────────────────────────────────────
-// Set up mock refs that the service's Firestore chain will hit.
-// db.collection('mtg-deck-handler').get()            → listDecks
-// db.collection('mtg-deck-handler').doc(id).get()    → getDeck / updateDeck / deleteDeck
-// db.collection('mtg-deck-handler').add(data)        → createDeck
+// db.collection(COLLECTION).where('userId','==',uid).get() → listDecks
+// db.collection(COLLECTION).doc(id).get()                  → getDeck / updateDeck / deleteDeck
+// db.collection(COLLECTION).add(data)                      → createDeck
 
 const mockCollRef = {
   get: jest.fn(),
   doc: jest.fn(),
   add: jest.fn(),
+  where: jest.fn(),
 };
 const mockDocRef = {
   get: jest.fn(),
@@ -18,6 +18,7 @@ const mockDocRef = {
   delete: jest.fn(),
 };
 mockCollRef.doc.mockReturnValue(mockDocRef);
+mockCollRef.where.mockReturnValue(mockCollRef);
 
 jest.mock('./db', () => ({
   db: { collection: jest.fn(() => mockCollRef) },
@@ -25,17 +26,26 @@ jest.mock('./db', () => ({
 
 const { listDecks, getDeck, createDeck, updateDeck, deleteDeck } = require('./deckService');
 
+const UID = 'user-abc';
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockCollRef.doc.mockReturnValue(mockDocRef);
+  mockCollRef.where.mockReturnValue(mockCollRef);
 });
 
 // ── listDecks ─────────────────────────────────────────────────────────────────
 
-describe('listDecks()', () => {
+describe('listDecks(userId)', () => {
   it('returns an empty array when no decks exist', async () => {
     mockCollRef.get.mockResolvedValue({ docs: [] });
-    expect(await listDecks()).toEqual([]);
+    expect(await listDecks(UID)).toEqual([]);
+  });
+
+  it('queries by userId', async () => {
+    mockCollRef.get.mockResolvedValue({ docs: [] });
+    await listDecks(UID);
+    expect(mockCollRef.where).toHaveBeenCalledWith('userId', '==', UID);
   });
 
   it('returns metadata for each deck document', async () => {
@@ -54,7 +64,7 @@ describe('listDecks()', () => {
         },
       ],
     });
-    const result = await listDecks();
+    const result = await listDecks(UID);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       id: 'deck-1',
@@ -71,7 +81,7 @@ describe('listDecks()', () => {
     mockCollRef.get.mockResolvedValue({
       docs: [{ id: 'd', data: () => ({ name: 'Empty', format: '', notes: '', cards: [], sideboard: [], updated_at: '' }) }],
     });
-    const [meta] = await listDecks();
+    const [meta] = await listDecks(UID);
     expect(meta.card_count).toBe(0);
   });
 });
@@ -80,7 +90,7 @@ describe('listDecks()', () => {
 
 describe('getDeck(id)', () => {
   it('returns the full deck object', async () => {
-    const deckData = { name: 'Mono Red', format: 'Standard', cards: [], sideboard: [], notes: '', tags: [] };
+    const deckData = { name: 'Mono Red', format: 'Standard', cards: [], sideboard: [], notes: '', tags: [], userId: UID };
     mockDocRef.get.mockResolvedValue({ exists: true, id: 'deck-1', data: () => deckData });
     const result = await getDeck('deck-1');
     expect(result).toEqual({ id: 'deck-1', ...deckData });
@@ -97,15 +107,22 @@ describe('getDeck(id)', () => {
 describe('createDeck(data)', () => {
   it('returns a deck with a generated id', async () => {
     mockCollRef.add.mockResolvedValue({ id: 'new-uuid' });
-    const deck = await createDeck({ name: 'New Deck' });
+    const deck = await createDeck({ name: 'New Deck', userId: UID });
     expect(deck.id).toBe('new-uuid');
     expect(deck.name).toBe('New Deck');
+  });
+
+  it('stores the userId on the deck', async () => {
+    mockCollRef.add.mockResolvedValue({ id: 'x' });
+    const deck = await createDeck({ name: 'Owned', userId: UID });
+    expect(deck.userId).toBe(UID);
+    expect(mockCollRef.add).toHaveBeenCalledWith(expect.objectContaining({ userId: UID }));
   });
 
   it('sets created_at and updated_at to ISO timestamps', async () => {
     mockCollRef.add.mockResolvedValue({ id: 'x' });
     const before = new Date().toISOString();
-    const deck = await createDeck({ name: 'Timed' });
+    const deck = await createDeck({ name: 'Timed', userId: UID });
     const after = new Date().toISOString();
     expect(deck.created_at >= before).toBe(true);
     expect(deck.created_at <= after).toBe(true);
@@ -114,7 +131,7 @@ describe('createDeck(data)', () => {
 
   it('calls collection().add() with the deck data', async () => {
     mockCollRef.add.mockResolvedValue({ id: 'x' });
-    await createDeck({ name: 'Stored' });
+    await createDeck({ name: 'Stored', userId: UID });
     expect(mockCollRef.add).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Stored' }),
     );
@@ -122,7 +139,7 @@ describe('createDeck(data)', () => {
 
   it('does not allow the caller to override the generated id', async () => {
     mockCollRef.add.mockResolvedValue({ id: 'generated' });
-    const deck = await createDeck({ name: 'Test', id: 'fixed-id' });
+    const deck = await createDeck({ name: 'Test', id: 'fixed-id', userId: UID });
     expect(deck.id).toBe('generated');
     expect(mockCollRef.add).toHaveBeenCalledWith(
       expect.not.objectContaining({ id: expect.anything() }),
@@ -133,7 +150,7 @@ describe('createDeck(data)', () => {
 // ── updateDeck ────────────────────────────────────────────────────────────────
 
 describe('updateDeck(id, data)', () => {
-  const existing = { name: 'Before', format: 'Standard', notes: '', created_at: '2024-01-01T00:00:00.000Z', tags: [], cards: [], sideboard: [] };
+  const existing = { name: 'Before', format: 'Standard', notes: '', created_at: '2024-01-01T00:00:00.000Z', tags: [], cards: [], sideboard: [], userId: UID };
 
   it('returns merged deck with new updated_at', async () => {
     mockDocRef.get.mockResolvedValue({ exists: true, id: 'deck-1', data: () => existing });

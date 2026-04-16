@@ -7,11 +7,12 @@ const COLLECTION = 'mtg-deck-handler';
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Lists all decks (metadata only — no cards array).
+ * Lists decks belonging to the given user (metadata only — no cards array).
+ * @param {string} userId
  * @returns {Promise<Array>}
  */
-async function listDecks() {
-  const snapshot = await db.collection(COLLECTION).get();
+async function listDecks(userId) {
+  const snapshot = await db.collection(COLLECTION).where('userId', '==', userId).get();
   return snapshot.docs.map((doc) => {
     const data = doc.data();
     const allCards = [...(data.cards || []), ...(data.sideboard || [])];
@@ -39,7 +40,7 @@ async function getDeck(id) {
 }
 
 /**
- * Creates a new deck and returns it.
+ * Creates a new deck and returns it. Caller must include userId in data.
  * @param {object} data
  * @returns {Promise<object>}
  */
