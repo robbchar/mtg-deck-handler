@@ -1,0 +1,54 @@
+'use strict';
+
+const { db } = require('./db');
+const { updateDeck } = require('./deckService');
+
+const DECK_COLLECTION = 'mtg-deck-handler';
+const SNAPSHOTS_SUBCOLLECTION = 'snapshots';
+
+function snapshotsRef(deckId) {
+  return db.collection(DECK_COLLECTION).doc(deckId).collection(SNAPSHOTS_SUBCOLLECTION);
+}
+
+/**
+ * Returns all snapshots for a deck, ordered newest first.
+ * @param {string} deckId
+ * @returns {Promise<object[]>}
+ */
+async function listSnapshots(deckId) {
+  const snapshot = await snapshotsRef(deckId).orderBy('createdAt', 'desc').get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+/**
+ * Creates a snapshot of the current deck state.
+ * @param {string} deckId
+ * @param {{ cards?, sideboard?, format?, notes? }} data
+ * @returns {Promise<object>}
+ */
+async function createSnapshot(deckId, data) {
+  const entry = {
+    createdAt: new Date().toISOString(),
+    cards: data.cards ?? [],
+    sideboard: data.sideboard ?? [],
+    format: data.format ?? '',
+    notes: data.notes ?? '',
+  };
+  const docRef = await snapshotsRef(deckId).add(entry);
+  return { id: docRef.id, ...entry };
+}
+
+/**
+ * Reverts a deck to the state captured in the given snapshot.
+ * @param {string} deckId
+ * @param {string} snapshotId
+ * @returns {Promise<object>} the updated deck
+ */
+async function revertToSnapshot(deckId, snapshotId) {
+  const snapDoc = await snapshotsRef(deckId).doc(snapshotId).get();
+  if (!snapDoc.exists) throw new Error(`Snapshot not found: ${snapshotId}`);
+  const { cards, sideboard, format, notes } = snapDoc.data();
+  return updateDeck(deckId, { cards, sideboard, format, notes });
+}
+
+module.exports = { listSnapshots, createSnapshot, revertToSnapshot };
