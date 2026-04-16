@@ -118,3 +118,24 @@ export type DeckAction =
   | { type: 'UPDATE_DECK'; payload: DeckMetadata }
   | { type: 'REMOVE_DECK'; payload: string }
   | { type: 'ROLLBACK_REMOVE'; payload: DeckMetadata }
+
+// ── Deck history types ────────────────────────────────────────────────────────
+
+export interface DeckSnapshot {
+  id: string
+  createdAt: string      // ISO timestamp
+  cards: CardEntry[]     // mainboard at snapshot time
+  sideboard: CardEntry[] // sideboard at snapshot time
+  format: string
+  notes: string
+}
+
+/**
+ * Represents a net change to a single card between two consecutive snapshots.
+ * delta > 0 = added, delta < 0 = removed.
+ */
+export interface CardDiff {
+  name: string
+  delta: number
+  section: 'mainboard' | 'sideboard'
+}
