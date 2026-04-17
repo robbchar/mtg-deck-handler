@@ -568,24 +568,27 @@ describe('DeckEditor — tab navigation', () => {
 // ── Snapshot timer ────────────────────────────────────────────────────────────
 
 describe('DeckEditor — snapshot timer', () => {
-  it('posts a snapshot after SNAPSHOT_WINDOW_MS of inactivity following a card change', async () => {
+  it('posts a snapshot after SNAPSHOT_WINDOW_MS of inactivity following a change', async () => {
     mockedClient.post.mockResolvedValue({ data: {} })
     renderEditor()
-    // Wait for the deck to load with real timers before handing over to fake timers
-    await waitFor(() => screen.getByTestId('add-card-btn'))
+    // Wait for deck to load with real timers
+    await waitFor(() => screen.getByTestId('deck-editor'))
 
     vi.useFakeTimers()
+    // Trigger a change to start the snapshot timer
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'modern' } })
+    })
 
-    // Trigger a card change via the add-card flow is complex to simulate;
-    // instead verify the timer is scheduled by checking post is called after
-    // advancing fake timers past the snapshot window.
-    // The snapshot POST fires after 3 minutes (180_000 ms).
+    // Advance past the snapshot window
     await act(async () => {
       vi.advanceTimersByTime(180_001)
     })
 
-    // If no change was made, no snapshot fires (timer only starts on change).
-    // This test confirms the timer machinery is wired without breaking existing tests.
+    expect(mockedClient.post).toHaveBeenCalledWith(
+      `/api/decks/test-deck-id/snapshots`,
+      expect.objectContaining({ format: 'modern' }),
+    )
     vi.useRealTimers()
   })
 })

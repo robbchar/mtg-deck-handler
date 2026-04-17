@@ -146,15 +146,20 @@ function DeckEditor() {
     [id, updateDeck],
   )
 
-  /** Resets the 3-minute inactivity timer that commits a snapshot. */
-  const scheduleSnapshot = useCallback(() => {
-    snapshotPendingRef.current = true
+  // Keep snapshotDataRef in sync with the latest state so the timer always
+  // fires with up-to-date data even if state changed after the timer was set.
+  useEffect(() => {
     snapshotDataRef.current = {
       cards: mainboard,
       sideboard,
       format,
       notes: notesRef.current,
     }
+  }, [mainboard, sideboard, format])
+
+  /** Resets the 3-minute inactivity timer that commits a snapshot. */
+  const scheduleSnapshot = useCallback(() => {
+    snapshotPendingRef.current = true
     if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
     snapshotTimerRef.current = setTimeout(async () => {
       snapshotPendingRef.current = false
@@ -165,7 +170,7 @@ function DeckEditor() {
         console.error('Snapshot failed silently:', err)
       }
     }, SNAPSHOT_WINDOW_MS)
-  }, [id, mainboard, sideboard, format])
+  }, [id])
 
   // On unmount (navigation), flush any pending debounced save immediately so
   // no changes are silently discarded when the user navigates away.
@@ -363,6 +368,10 @@ function DeckEditor() {
   // ── Revert to snapshot ────────────────────────────────────────────────────────
 
   function handleRevert(deck: Deck, snapshot: DeckSnapshot) {
+    // Cancel any pending snapshot from the pre-revert session
+    if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+    snapshotPendingRef.current = false
+
     setNameValue(deck.name ?? '')
     savedNameRef.current = deck.name ?? ''
     setFormat(deck.format ?? '')
