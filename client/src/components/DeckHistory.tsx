@@ -15,7 +15,17 @@ interface DeckHistoryProps {
  * the oldest snapshot, which has no predecessor to diff against).
  */
 function computeDiff(current: DeckSnapshot, previous: DeckSnapshot | null): CardDiff[] {
-  if (!previous) return []
+  // First snapshot: treat every card as newly added (diff from empty deck)
+  if (!previous) {
+    const diffs: CardDiff[] = []
+    for (const card of current.cards) {
+      if (card.quantity > 0) diffs.push({ name: card.name, delta: card.quantity, section: 'mainboard', previousQuantity: 0 })
+    }
+    for (const card of current.sideboard) {
+      if (card.quantity > 0) diffs.push({ name: card.name, delta: card.quantity, section: 'sideboard', previousQuantity: 0 })
+    }
+    return diffs
+  }
 
   const diffs: CardDiff[] = []
   const sections: Array<'mainboard' | 'sideboard'> = ['mainboard', 'sideboard']
@@ -29,8 +39,9 @@ function computeDiff(current: DeckSnapshot, previous: DeckSnapshot | null): Card
     const allNames = new Set([...prevMap.keys(), ...currMap.keys()])
 
     for (const name of allNames) {
-      const delta = (currMap.get(name) ?? 0) - (prevMap.get(name) ?? 0)
-      if (delta !== 0) diffs.push({ name, delta, section })
+      const previousQuantity = prevMap.get(name) ?? 0
+      const delta = (currMap.get(name) ?? 0) - previousQuantity
+      if (delta !== 0) diffs.push({ name, delta, section, previousQuantity })
     }
   }
 

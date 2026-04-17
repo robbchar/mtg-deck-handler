@@ -82,19 +82,23 @@ export default function SnapshotEntry({
           {/* Expanded card chips */}
           {expanded && (
             <div className="mt-2 flex flex-wrap gap-1">
-              {diff.map((d) => (
-                <span
-                  key={`${d.section}-${d.name}`}
-                  className={`rounded px-1.5 py-0.5 text-xs font-medium ${
-                    d.delta > 0
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-red-50 text-red-700'
-                  }`}
-                >
-                  <span>{d.delta > 0 ? `+${d.delta}` : d.delta}</span>{' '}
-                  <span>{d.name}</span>
-                </span>
-              ))}
+              {diff.map((d) => {
+                const isAdditional = d.delta > 0 && (d.previousQuantity ?? 0) > 0
+                return (
+                  <span
+                    key={`${d.section}-${d.name}`}
+                    className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                      d.delta > 0
+                        ? 'bg-green-50 text-green-700'
+                        : 'bg-red-50 text-red-700'
+                    }`}
+                  >
+                    <span>{d.delta > 0 ? `+${d.delta}` : d.delta}</span>{' '}
+                    {isAdditional && <span className="opacity-60">additional </span>}
+                    <span>{d.name}</span>
+                  </span>
+                )
+              })}
             </div>
           )}
         </div>

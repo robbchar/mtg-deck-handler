@@ -138,4 +138,6 @@ export interface CardDiff {
   name: string
   delta: number
   section: 'mainboard' | 'sideboard'
+  /** Quantity in the prior snapshot. 0 means the card is brand new. */
+  previousQuantity?: number
 }
