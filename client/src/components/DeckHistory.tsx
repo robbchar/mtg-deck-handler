@@ -41,7 +41,8 @@ function computeDiff(current: DeckSnapshot, previous: DeckSnapshot | null): Card
  * Returns wins and losses from `games` that were logged before `cutoff` (ISO).
  */
 function wlAtPoint(games: GameEntry[], cutoff: string) {
-  const before = games.filter((g) => g.logged_at <= cutoff)
+  const cutoffDate = new Date(cutoff)
+  const before = games.filter((g) => new Date(g.logged_at) <= cutoffDate)
   return {
     wins: before.filter((g) => g.result === 'win').length,
     losses: before.filter((g) => g.result === 'loss').length,

@@ -40,6 +40,16 @@ export function useSnapshots(deckId: string | undefined) {
     }
   }, [deckId])
 
+  const refetchSnapshots = useCallback(async () => {
+    if (!deckId) return
+    try {
+      const { data } = await client.get<DeckSnapshot[]>(`/api/decks/${deckId}/snapshots`)
+      setSnapshots(data)
+    } catch {
+      // silently ignore background refetch errors
+    }
+  }, [deckId])
+
   const revertSnapshot = useCallback(
     async (snapshotId: string): Promise<Deck | null> => {
       if (!deckId) return null
@@ -47,13 +57,14 @@ export function useSnapshots(deckId: string | undefined) {
         const { data } = await client.post<Deck>(
           `/api/decks/${deckId}/snapshots/${snapshotId}/revert`,
         )
+        await refetchSnapshots()
         return data
       } catch (err) {
         setError(getErrorMessage(err, 'Failed to revert deck'))
         return null
       }
     },
-    [deckId],
+    [deckId, refetchSnapshots],
   )
 
   return { snapshots, loading, error, revertSnapshot }

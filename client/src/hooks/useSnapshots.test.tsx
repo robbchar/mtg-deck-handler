@@ -90,6 +90,7 @@ describe('useSnapshots — revertSnapshot', () => {
   it('calls POST /api/decks/:id/snapshots/:snapshotId/revert', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: [] })
     mockedAxios.post.mockResolvedValueOnce({ data: { id: DECK_ID } })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] }) // post-revert refetch
     const { result } = renderHook(() => useSnapshots(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
     await act(async () => {
@@ -102,6 +103,7 @@ describe('useSnapshots — revertSnapshot', () => {
     mockedAxios.get.mockResolvedValueOnce({ data: [] })
     const updatedDeck = { id: DECK_ID, name: 'Test', cards: [], sideboard: [], format: 'Modern', notes: '' }
     mockedAxios.post.mockResolvedValueOnce({ data: updatedDeck })
+    mockedAxios.get.mockResolvedValueOnce({ data: [] }) // post-revert refetch
     const { result } = renderHook(() => useSnapshots(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
     let deck: unknown
