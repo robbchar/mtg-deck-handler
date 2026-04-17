@@ -54,11 +54,12 @@ export function useSnapshots(deckId: string | undefined) {
     async (snapshotId: string): Promise<Deck | null> => {
       if (!deckId) return null
       try {
-        const { data } = await client.post<Deck>(
-          `/api/decks/${deckId}/snapshots/${snapshotId}/revert`,
-        )
+        await client.post(`/api/decks/${deckId}/snapshots/${snapshotId}/revert`)
+        // Re-fetch the full deck so the caller gets complete, server-confirmed data
+        // (the revert POST response may lack Scryfall fields stored on the deck doc)
+        const { data: freshDeck } = await client.get<Deck>(`/api/decks/${deckId}`)
         await refetchSnapshots()
-        return data
+        return freshDeck
       } catch (err) {
         setError(getErrorMessage(err, 'Failed to revert deck'))
         return null

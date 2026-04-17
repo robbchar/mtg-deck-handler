@@ -88,9 +88,10 @@ describe('useSnapshots — fetch on mount', () => {
 
 describe('useSnapshots — revertSnapshot', () => {
   it('calls POST /api/decks/:id/snapshots/:snapshotId/revert', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: [] })
-    mockedAxios.post.mockResolvedValueOnce({ data: { id: DECK_ID } })
-    mockedAxios.get.mockResolvedValueOnce({ data: [] }) // post-revert refetch
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })           // initial snapshot load
+    mockedAxios.post.mockResolvedValueOnce({ data: {} })          // revert POST
+    mockedAxios.get.mockResolvedValueOnce({ data: { id: DECK_ID } }) // fresh deck GET
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })           // refetch snapshots
     const { result } = renderHook(() => useSnapshots(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
     await act(async () => {
@@ -99,18 +100,20 @@ describe('useSnapshots — revertSnapshot', () => {
     expect(client.post).toHaveBeenCalledWith(`/api/decks/${DECK_ID}/snapshots/snap-1/revert`)
   })
 
-  it('returns the updated deck on success', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: [] })
-    const updatedDeck = { id: DECK_ID, name: 'Test', cards: [], sideboard: [], format: 'Modern', notes: '' }
-    mockedAxios.post.mockResolvedValueOnce({ data: updatedDeck })
-    mockedAxios.get.mockResolvedValueOnce({ data: [] }) // post-revert refetch
+  it('returns the fresh deck fetched after the revert', async () => {
+    const freshDeck = { id: DECK_ID, name: 'Test', cards: [], sideboard: [], format: 'Modern', notes: '' }
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })      // initial snapshot load
+    mockedAxios.post.mockResolvedValueOnce({ data: {} })     // revert POST (response ignored)
+    mockedAxios.get.mockResolvedValueOnce({ data: freshDeck }) // fresh deck GET
+    mockedAxios.get.mockResolvedValueOnce({ data: [] })      // refetch snapshots
     const { result } = renderHook(() => useSnapshots(DECK_ID))
     await waitFor(() => expect(result.current.loading).toBe(false))
     let deck: unknown
     await act(async () => {
       deck = await result.current.revertSnapshot('snap-1')
     })
-    expect(deck).toEqual(updatedDeck)
+    expect(deck).toEqual(freshDeck)
+    expect(client.get).toHaveBeenCalledWith(`/api/decks/${DECK_ID}`)
   })
 
   it('returns null on revert failure', async () => {
