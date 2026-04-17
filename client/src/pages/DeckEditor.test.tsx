@@ -607,4 +607,29 @@ describe('DeckEditor — revert', () => {
     await waitFor(() => expect(screen.getByTestId('mainboard-section')).toBeInTheDocument())
     expect(screen.queryByTestId('deck-history')).not.toBeInTheDocument()
   })
+
+  it('cancels the pending auto-save debounce on revert so pre-revert edits do not overwrite the server', async () => {
+    mockedClient.put.mockResolvedValue({ data: {} })
+    mockedClient.post.mockResolvedValue({ data: {} })
+    renderEditor()
+    // Load with real timers first
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Trigger a format change — queues a 2 s auto-save debounce
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'draft' } })
+    })
+
+    // Revert before the debounce fires
+    fireEvent.click(screen.getByTestId('tab-history'))
+    fireEvent.click(screen.getByRole('button', { name: /mock revert/i }))
+
+    // Advance past the 2-second auto-save window — no PUT should fire
+    await act(async () => { vi.advanceTimersByTime(3000) })
+
+    expect(mockedClient.put).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
 })

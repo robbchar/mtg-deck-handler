@@ -368,6 +368,9 @@ function DeckEditor() {
   // ── Revert to snapshot ────────────────────────────────────────────────────────
 
   function handleRevert(deck: Deck, snapshot: DeckSnapshot) {
+    // Cancel any pending auto-save so pre-revert edits don't overwrite the revert
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    pendingRef.current = {}
     // Cancel any pending snapshot from the pre-revert session
     if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
     snapshotPendingRef.current = false
