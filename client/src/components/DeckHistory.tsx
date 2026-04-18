@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import Spinner from './Spinner'
 import SnapshotEntry from './SnapshotEntry'
 import { useSnapshots } from '../hooks/useSnapshots'
@@ -63,6 +63,10 @@ function wlAtPoint(games: GameEntry[], cutoff: string) {
 
 export default function DeckHistory({ deckId, games, onRevert }: DeckHistoryProps) {
   const { snapshots, loading, error, revertSnapshot } = useSnapshots(deckId)
+  // Tracks which snapshot is the active/current state of the deck.
+  // null = not yet set; falls back to the newest snapshot (snapshots[0]).
+  const [currentSnapshotId, setCurrentSnapshotId] = useState<string | null>(null)
+  const activeSnapshotId = currentSnapshotId ?? snapshots[0]?.id ?? null
 
   if (loading) {
     return (
@@ -116,7 +120,10 @@ export default function DeckHistory({ deckId, games, onRevert }: DeckHistoryProp
 
           async function handleRevert() {
             const deck = await revertSnapshot(snapshot.id)
-            if (deck) onRevert(deck, snapshot)
+            if (deck) {
+              setCurrentSnapshotId(snapshot.id)
+              onRevert(deck, snapshot)
+            }
           }
 
           return (
@@ -136,7 +143,7 @@ export default function DeckHistory({ deckId, games, onRevert }: DeckHistoryProp
                 winsAtPoint={wins}
                 lossesAtPoint={losses}
                 onRevert={handleRevert}
-                isCurrent={index === 0}
+                isCurrent={snapshot.id === activeSnapshotId}
               />
             </Fragment>
           )
