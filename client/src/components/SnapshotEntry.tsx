@@ -103,13 +103,13 @@ export default function SnapshotEntry({
           )}
         </div>
 
-        {/* Right: Revert button */}
+        {/* Right: Restore button */}
         <button
           type="button"
           onClick={onRevert}
           className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          Revert
+          Restore
         </button>
       </div>
     </div>

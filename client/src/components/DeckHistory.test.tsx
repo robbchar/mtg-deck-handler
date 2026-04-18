@@ -94,7 +94,7 @@ describe('DeckHistory — list rendering', () => {
   it('renders one SnapshotEntry per snapshot', () => {
     mockUseSnapshotsResult.snapshots = [SNAPSHOT_LATE, SNAPSHOT_EARLY]
     render(<DeckHistory deckId="deck-1" games={[]} onRevert={vi.fn()} />)
-    expect(screen.getAllByRole('button', { name: /revert/i })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /restore/i })).toHaveLength(2)
   })
 })
 
@@ -141,7 +141,7 @@ describe('DeckHistory — revert', () => {
     mockUseSnapshotsResult.snapshots = [SNAPSHOT_EARLY]
     const onRevert = vi.fn()
     render(<DeckHistory deckId="deck-1" games={[]} onRevert={onRevert} />)
-    fireEvent.click(screen.getByRole('button', { name: /revert/i }))
+    fireEvent.click(screen.getByRole('button', { name: /restore/i }))
     await waitFor(() => expect(onRevert).toHaveBeenCalledWith(updatedDeck, SNAPSHOT_EARLY))
   })
 
@@ -150,7 +150,7 @@ describe('DeckHistory — revert', () => {
     mockUseSnapshotsResult.snapshots = [SNAPSHOT_EARLY]
     const onRevert = vi.fn()
     render(<DeckHistory deckId="deck-1" games={[]} onRevert={onRevert} />)
-    fireEvent.click(screen.getByRole('button', { name: /revert/i }))
+    fireEvent.click(screen.getByRole('button', { name: /restore/i }))
     await waitFor(() => expect(mockRevertSnapshot).toHaveBeenCalled())
     expect(onRevert).not.toHaveBeenCalled()
   })

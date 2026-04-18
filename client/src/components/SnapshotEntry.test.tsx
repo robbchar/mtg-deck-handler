@@ -112,7 +112,7 @@ describe('SnapshotEntry — rendering', () => {
     expect(screen.getByText(/notes changed/i)).toBeInTheDocument()
   })
 
-  it('renders a Revert button', () => {
+  it('renders a Restore button', () => {
     render(
       <SnapshotEntry
         snapshot={SNAPSHOT}
@@ -124,7 +124,7 @@ describe('SnapshotEntry — rendering', () => {
         onRevert={vi.fn()}
       />,
     )
-    expect(screen.getByRole('button', { name: /revert/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /restore/i })).toBeInTheDocument()
   })
 })
 
@@ -199,7 +199,7 @@ describe('SnapshotEntry — expand/collapse', () => {
 // ── revert ────────────────────────────────────────────────────────────────────
 
 describe('SnapshotEntry — revert', () => {
-  it('calls onRevert when Revert button is clicked', () => {
+  it('calls onRevert when Restore button is clicked', () => {
     const onRevert = vi.fn()
     render(
       <SnapshotEntry
@@ -212,7 +212,7 @@ describe('SnapshotEntry — revert', () => {
         onRevert={onRevert}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: /revert/i }))
+    fireEvent.click(screen.getByRole('button', { name: /restore/i }))
     expect(onRevert).toHaveBeenCalledTimes(1)
   })
 })
