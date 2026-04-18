@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment } from 'react'
 import Spinner from './Spinner'
 import SnapshotEntry from './SnapshotEntry'
 import { useSnapshots } from '../hooks/useSnapshots'
@@ -7,6 +7,7 @@ import type { DeckSnapshot, CardDiff, GameEntry, Deck } from '../types'
 interface DeckHistoryProps {
   deckId: string
   games: GameEntry[]
+  activeSnapshotId?: string | null
   onRevert: (deck: Deck, snapshot: DeckSnapshot) => void
 }
 
@@ -61,12 +62,11 @@ function wlAtPoint(games: GameEntry[], cutoff: string) {
   }
 }
 
-export default function DeckHistory({ deckId, games, onRevert }: DeckHistoryProps) {
+export default function DeckHistory({ deckId, games, activeSnapshotId, onRevert }: DeckHistoryProps) {
   const { snapshots, loading, error, revertSnapshot } = useSnapshots(deckId)
-  // Tracks which snapshot is the active/current state of the deck.
-  // null = not yet set; falls back to the newest snapshot (snapshots[0]).
-  const [currentSnapshotId, setCurrentSnapshotId] = useState<string | null>(null)
-  const activeSnapshotId = currentSnapshotId ?? snapshots[0]?.id ?? null
+  // Fall back to the newest snapshot when the server hasn't set activeSnapshotId yet
+  // (e.g. decks created before this feature was added).
+  const currentSnapshotId = activeSnapshotId ?? snapshots[0]?.id ?? null
 
   if (loading) {
     return (
@@ -120,10 +120,7 @@ export default function DeckHistory({ deckId, games, onRevert }: DeckHistoryProp
 
           async function handleRevert() {
             const deck = await revertSnapshot(snapshot.id)
-            if (deck) {
-              setCurrentSnapshotId(snapshot.id)
-              onRevert(deck, snapshot)
-            }
+            if (deck) onRevert(deck, snapshot)
           }
 
           return (
@@ -143,7 +140,7 @@ export default function DeckHistory({ deckId, games, onRevert }: DeckHistoryProp
                 winsAtPoint={wins}
                 lossesAtPoint={losses}
                 onRevert={handleRevert}
-                isCurrent={snapshot.id === activeSnapshotId}
+                isCurrent={snapshot.id === currentSnapshotId}
               />
             </Fragment>
           )

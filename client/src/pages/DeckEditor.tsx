@@ -97,6 +97,9 @@ function DeckEditor() {
   // ── Tab state ────────────────────────────────────────────────────────────────
   const [tabView, setTabView] = useState<TabView>('current')
 
+  // ── Active snapshot ───────────────────────────────────────────────────────────
+  const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null)
+
   // ── Notes ref (notes not editable in UI, stored from deck load) ───────────────
   const notesRef = useRef('')
 
@@ -238,6 +241,7 @@ function DeckEditor() {
       setMainboard(deck.cards ?? [])
       setSideboard(deck.sideboard ?? [])
       notesRef.current = deck.notes ?? ''
+      setActiveSnapshotId(deck.activeSnapshotId ?? null)
       setLoadState('ready')
     }
 
@@ -393,6 +397,7 @@ function DeckEditor() {
     setMainboard(deck.cards ?? [])
     setSideboard(deck.sideboard ?? [])
     notesRef.current = deck.notes ?? ''
+    setActiveSnapshotId(deck.activeSnapshotId ?? null)
     setTabView('current')
     addToast(`Restored to ${formatDate(snapshot.createdAt)}`)
   }
@@ -701,6 +706,7 @@ function DeckEditor() {
         <DeckHistory
           deckId={id!}
           games={games}
+          activeSnapshotId={activeSnapshotId}
           onRevert={handleRevert}
         />
       )}

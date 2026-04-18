@@ -86,6 +86,10 @@ describe('listSnapshots(deckId)', () => {
 // ── createSnapshot ────────────────────────────────────────────────────────────
 
 describe('createSnapshot(deckId, data)', () => {
+  beforeEach(() => {
+    updateDeck.mockResolvedValue({});
+  });
+
   it('returns the new snapshot with a generated id', async () => {
     mockSnapshotsRef.add.mockResolvedValue({ id: 'new-snap' });
     const snap = await createSnapshot(DECK_ID, { cards: [], sideboard: [], format: 'Modern', notes: '' });
@@ -117,6 +121,12 @@ describe('createSnapshot(deckId, data)', () => {
       expect.objectContaining({ cards, format: 'Modern', notes: 'test' }),
     );
   });
+
+  it('sets activeSnapshotId on the deck to the new snapshot id', async () => {
+    mockSnapshotsRef.add.mockResolvedValue({ id: 'new-snap' });
+    await createSnapshot(DECK_ID, { cards: [], sideboard: [], format: 'Modern', notes: '' });
+    expect(updateDeck).toHaveBeenCalledWith(DECK_ID, { activeSnapshotId: 'new-snap' });
+  });
 });
 
 // ── revertToSnapshot ──────────────────────────────────────────────────────────
@@ -130,7 +140,7 @@ describe('revertToSnapshot(deckId, snapshotId)', () => {
     notes: 'original',
   };
 
-  it('calls updateDeck with the snapshot fields', async () => {
+  it('calls updateDeck with the snapshot fields and activeSnapshotId', async () => {
     mockSnapshotDocRef.get.mockResolvedValue({ exists: true, data: () => snapData });
     updateDeck.mockResolvedValue({ id: DECK_ID, ...snapData });
     await revertToSnapshot(DECK_ID, SNAP_ID);
@@ -139,6 +149,7 @@ describe('revertToSnapshot(deckId, snapshotId)', () => {
       sideboard: snapData.sideboard,
       format: snapData.format,
       notes: snapData.notes,
+      activeSnapshotId: SNAP_ID,
     });
   });
 

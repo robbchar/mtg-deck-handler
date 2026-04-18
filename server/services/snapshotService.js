@@ -35,6 +35,7 @@ async function createSnapshot(deckId, data) {
     notes: data.notes ?? '',
   };
   const docRef = await snapshotsRef(deckId).add(entry);
+  await updateDeck(deckId, { activeSnapshotId: docRef.id });
   return { id: docRef.id, ...entry };
 }
 
@@ -48,7 +49,7 @@ async function revertToSnapshot(deckId, snapshotId) {
   const snapDoc = await snapshotsRef(deckId).doc(snapshotId).get();
   if (!snapDoc.exists) throw new Error(`Snapshot not found: ${snapshotId}`);
   const { cards, sideboard, format, notes } = snapDoc.data();
-  return updateDeck(deckId, { cards, sideboard, format, notes });
+  return updateDeck(deckId, { cards, sideboard, format, notes, activeSnapshotId: snapshotId });
 }
 
 /**

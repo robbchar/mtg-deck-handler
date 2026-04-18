@@ -134,35 +134,23 @@ describe('DeckHistory — diff derivation', () => {
 // ── revert ────────────────────────────────────────────────────────────────────
 
 describe('DeckHistory — current badge', () => {
-  it('marks the newest snapshot as current by default', () => {
+  it('falls back to marking the newest snapshot as current when activeSnapshotId is not provided', () => {
     mockUseSnapshotsResult.snapshots = [SNAPSHOT_LATE, SNAPSHOT_EARLY]
     render(<DeckHistory deckId="deck-1" games={[]} onRevert={vi.fn()} />)
     expect(screen.getByText('Current')).toBeInTheDocument()
-    // Only one Restore button (the older snapshot)
     expect(screen.getAllByRole('button', { name: /restore/i })).toHaveLength(1)
   })
 
-  it('moves the Current badge to the restored snapshot after a successful revert', async () => {
-    const updatedDeck: Deck = {
-      id: 'deck-1', name: 'Test', format: 'Modern', notes: '',
-      cards: [], sideboard: [], created_at: '', updated_at: '',
-    }
-    mockRevertSnapshot.mockResolvedValueOnce(updatedDeck)
+  it('marks the snapshot matching activeSnapshotId as current', () => {
     mockUseSnapshotsResult.snapshots = [SNAPSHOT_LATE, SNAPSHOT_EARLY]
-    render(<DeckHistory deckId="deck-1" games={[]} onRevert={vi.fn()} />)
-
-    // Before restore: SNAPSHOT_LATE (index 0) is current
+    // Simulate a prior restore to SNAPSHOT_EARLY
+    render(<DeckHistory deckId="deck-1" games={[]} activeSnapshotId={SNAPSHOT_EARLY.id} onRevert={vi.fn()} />)
+    // SNAPSHOT_LATE should now have the Restore button
+    expect(screen.getByRole('button', { name: /restore/i })).toBeInTheDocument()
+    // Current badge is present (on SNAPSHOT_EARLY)
     expect(screen.getByText('Current')).toBeInTheDocument()
+    // Only one Restore button — SNAPSHOT_LATE gets it, SNAPSHOT_EARLY gets badge
     expect(screen.getAllByRole('button', { name: /restore/i })).toHaveLength(1)
-
-    // Restore SNAPSHOT_EARLY
-    fireEvent.click(screen.getByRole('button', { name: /restore/i }))
-    await waitFor(() => expect(mockRevertSnapshot).toHaveBeenCalledWith(SNAPSHOT_EARLY.id))
-
-    // After restore: SNAPSHOT_EARLY is current, SNAPSHOT_LATE gets Restore button
-    await waitFor(() => expect(screen.getAllByRole('button', { name: /restore/i })).toHaveLength(1))
-    // Current badge still present (now on SNAPSHOT_EARLY)
-    expect(screen.getByText('Current')).toBeInTheDocument()
   })
 })
 

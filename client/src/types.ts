@@ -24,6 +24,7 @@ export interface Deck {
   cards: CardEntry[]
   sideboard: CardEntry[]
   tags?: string[]
+  activeSnapshotId?: string | null
   created_at: string
   updated_at: string
   unknown?: string[]
