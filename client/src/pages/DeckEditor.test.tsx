@@ -569,7 +569,7 @@ describe('DeckEditor — tab navigation', () => {
 
 describe('DeckEditor — snapshot timer', () => {
   it('posts a snapshot after SNAPSHOT_WINDOW_MS of inactivity following a change', async () => {
-    mockedClient.post.mockResolvedValue({ data: {} })
+    mockedClient.post.mockResolvedValue({ data: { id: 'snap-new', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' } })
     renderEditor()
     // Wait for deck to load with real timers
     await waitFor(() => screen.getByTestId('deck-editor'))
@@ -639,7 +639,7 @@ describe('DeckEditor — revert', () => {
 describe('DeckEditor — timeline pruning', () => {
   it('calls DELETE /snapshots/after/:id before creating a new snapshot when edits follow a restore', async () => {
     mockedClient.delete.mockResolvedValue({ data: { deleted: 1 } })
-    mockedClient.post.mockResolvedValue({ data: {} })
+    mockedClient.post.mockResolvedValue({ data: { id: 'snap-new', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' } })
     renderEditor()
     await waitFor(() => screen.getByTestId('deck-editor'))
 
@@ -677,7 +677,7 @@ describe('DeckEditor — timeline pruning', () => {
   })
 
   it('does not call DELETE when no restore happened before the new snapshot', async () => {
-    mockedClient.post.mockResolvedValue({ data: {} })
+    mockedClient.post.mockResolvedValue({ data: { id: 'snap-new', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' } })
     renderEditor()
     await waitFor(() => screen.getByTestId('deck-editor'))
 

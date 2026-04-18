@@ -178,7 +178,8 @@ function DeckEditor() {
         revertedToSnapshotIdRef.current = null
       }
       try {
-        await client.post(`/api/decks/${id}/snapshots`, snapshotDataRef.current)
+        const { data: newSnapshot } = await client.post<DeckSnapshot>(`/api/decks/${id}/snapshots`, snapshotDataRef.current)
+        setActiveSnapshotId(newSnapshot.id)
       } catch (err) {
         console.error('Snapshot failed silently:', err)
       }
