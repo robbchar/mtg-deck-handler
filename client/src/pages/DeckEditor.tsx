@@ -103,6 +103,8 @@ function DeckEditor() {
   // ── Snapshot timer ────────────────────────────────────────────────────────────
   const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const snapshotPendingRef = useRef(false)
+  /** Tracks the snapshot ID the user last restored to, so new edits can prune future history. */
+  const revertedToSnapshotIdRef = useRef<string | null>(null)
 
   /** Mirrors current deck state into a ref for snapshot timer and beforeunload. */
   const snapshotDataRef = useRef<{
@@ -165,6 +167,10 @@ function DeckEditor() {
       snapshotPendingRef.current = false
       if (!id) return
       try {
+        if (revertedToSnapshotIdRef.current) {
+          await client.delete(`/api/decks/${id}/snapshots/after/${revertedToSnapshotIdRef.current}`)
+          revertedToSnapshotIdRef.current = null
+        }
         await client.post(`/api/decks/${id}/snapshots`, snapshotDataRef.current)
       } catch (err) {
         console.error('Snapshot failed silently:', err)
@@ -374,6 +380,8 @@ function DeckEditor() {
     // Cancel any pending snapshot from the pre-revert session
     if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
     snapshotPendingRef.current = false
+    // Remember where we restored to so the next snapshot creation can prune future history
+    revertedToSnapshotIdRef.current = snapshot.id
 
     setNameValue(deck.name ?? '')
     savedNameRef.current = deck.name ?? ''
@@ -382,7 +390,7 @@ function DeckEditor() {
     setSideboard(deck.sideboard ?? [])
     notesRef.current = deck.notes ?? ''
     setTabView('current')
-    addToast(`Deck reverted to ${formatDate(snapshot.createdAt)}`)
+    addToast(`Restored to ${formatDate(snapshot.createdAt)}`)
   }
 
   // ── Export to clipboard ───────────────────────────────────────────────────

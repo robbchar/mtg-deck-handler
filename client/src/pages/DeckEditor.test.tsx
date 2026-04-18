@@ -633,3 +633,65 @@ describe('DeckEditor — revert', () => {
     vi.useRealTimers()
   })
 })
+
+// ── Timeline pruning ──────────────────────────────────────────────────────────
+
+describe('DeckEditor — timeline pruning', () => {
+  it('calls DELETE /snapshots/after/:id before creating a new snapshot when edits follow a restore', async () => {
+    mockedClient.delete.mockResolvedValue({ data: { deleted: 1 } })
+    mockedClient.post.mockResolvedValue({ data: {} })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Simulate a restore (mock DeckHistory fires onRevert with snap-1)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('tab-history'))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /mock revert/i }))
+    })
+
+    // Trigger an edit to start the snapshot timer
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'draft' } })
+    })
+
+    // Advance past the 3-minute snapshot window
+    await act(async () => { vi.advanceTimersByTime(180_001) })
+
+    // Prune call must precede snapshot creation
+    const deleteCalls = mockedClient.delete.mock.invocationCallOrder
+    const postCalls = mockedClient.post.mock.invocationCallOrder
+    expect(mockedClient.delete).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/decks\/.+\/snapshots\/after\/snap-1/),
+    )
+    expect(mockedClient.post).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/decks\/.+\/snapshots$/),
+      expect.any(Object),
+    )
+    expect(Math.min(...deleteCalls)).toBeLessThan(Math.min(...postCalls))
+
+    vi.useRealTimers()
+  })
+
+  it('does not call DELETE when no restore happened before the new snapshot', async () => {
+    mockedClient.post.mockResolvedValue({ data: {} })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Edit without restoring first
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'draft' } })
+    })
+
+    await act(async () => { vi.advanceTimersByTime(180_001) })
+
+    expect(mockedClient.delete).not.toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
+})
