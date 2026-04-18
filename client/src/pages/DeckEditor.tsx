@@ -166,11 +166,15 @@ function DeckEditor() {
     snapshotTimerRef.current = setTimeout(async () => {
       snapshotPendingRef.current = false
       if (!id) return
-      try {
-        if (revertedToSnapshotIdRef.current) {
+      if (revertedToSnapshotIdRef.current) {
+        try {
           await client.delete(`/api/decks/${id}/snapshots/after/${revertedToSnapshotIdRef.current}`)
-          revertedToSnapshotIdRef.current = null
+        } catch (pruneErr) {
+          console.error('Timeline prune failed silently:', pruneErr)
         }
+        revertedToSnapshotIdRef.current = null
+      }
+      try {
         await client.post(`/api/decks/${id}/snapshots`, snapshotDataRef.current)
       } catch (err) {
         console.error('Snapshot failed silently:', err)
