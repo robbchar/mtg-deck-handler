@@ -147,3 +147,38 @@ describe('POST /api/decks/:id/snapshots/:snapshotId/revert', () => {
     expect(res.statusCode).toBe(500);
   });
 });
+
+// ── DELETE /api/decks/:id/snapshots/after/:snapshotId ─────────────────────────
+
+describe('DELETE /api/decks/:id/snapshots/after/:snapshotId', () => {
+  it('returns 200 with deleted count on success', async () => {
+    snapshotService.deleteSnapshotsAfter.mockResolvedValue({ deleted: 2 });
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/snapshots/after/${SNAP_ID}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ deleted: 2 });
+  });
+
+  it('calls deleteSnapshotsAfter with deck id and snapshot id', async () => {
+    snapshotService.deleteSnapshotsAfter.mockResolvedValue({ deleted: 0 });
+    await request(app).delete(`/api/decks/${DECK_ID}/snapshots/after/${SNAP_ID}`);
+    expect(snapshotService.deleteSnapshotsAfter).toHaveBeenCalledWith(DECK_ID, SNAP_ID);
+  });
+
+  it('returns 403 when deck belongs to a different user', async () => {
+    deckService.getDeck.mockResolvedValue({ ...MOCK_DECK, userId: 'other-uid' });
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/snapshots/after/${SNAP_ID}`);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 404 when pivot snapshot not found', async () => {
+    snapshotService.deleteSnapshotsAfter.mockRejectedValue(new Error(`Snapshot not found: ${SNAP_ID}`));
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/snapshots/after/${SNAP_ID}`);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 500 on unexpected errors', async () => {
+    snapshotService.deleteSnapshotsAfter.mockRejectedValue(new Error('db failure'));
+    const res = await request(app).delete(`/api/decks/${DECK_ID}/snapshots/after/${SNAP_ID}`);
+    expect(res.statusCode).toBe(500);
+  });
+});

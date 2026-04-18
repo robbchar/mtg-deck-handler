@@ -9,7 +9,7 @@
 
 const { Router } = require('express');
 const { getDeck } = require('../services/deckService');
-const { listSnapshots, createSnapshot, revertToSnapshot } = require('../services/snapshotService');
+const { listSnapshots, createSnapshot, revertToSnapshot, deleteSnapshotsAfter } = require('../services/snapshotService');
 
 const router = Router({ mergeParams: true });
 
@@ -77,6 +77,24 @@ router.post('/:snapshotId/revert', async (req, res) => {
       return res.status(404).json({ error: err.message });
     }
     console.error('POST /api/decks/:id/snapshots/:snapshotId/revert error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/decks/:id/snapshots/after/:snapshotId
+ * Deletes all snapshots created after the given pivot snapshot.
+ * Called before creating a new snapshot when the user edits after a restore.
+ */
+router.delete('/after/:snapshotId', async (req, res) => {
+  try {
+    const result = await deleteSnapshotsAfter(req.params.id, req.params.snapshotId);
+    res.json(result);
+  } catch (err) {
+    if (err.message && err.message.startsWith('Snapshot not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    console.error('DELETE /api/decks/:id/snapshots/after/:snapshotId error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
