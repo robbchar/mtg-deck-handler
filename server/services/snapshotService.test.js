@@ -9,16 +9,25 @@
 
 const mockSnapshotDocRef = { get: jest.fn() };
 const mockOrderByRef = { get: jest.fn() };
+const mockWhereRef = { get: jest.fn() };
+const mockBatch = {
+  delete: jest.fn(),
+  commit: jest.fn().mockResolvedValue(undefined),
+};
 const mockSnapshotsRef = {
   orderBy: jest.fn(() => mockOrderByRef),
   add: jest.fn(),
   doc: jest.fn(() => mockSnapshotDocRef),
+  where: jest.fn(() => mockWhereRef),
 };
 const mockDeckDocRef = { collection: jest.fn(() => mockSnapshotsRef) };
 const mockDeckCollRef = { doc: jest.fn(() => mockDeckDocRef) };
 
 jest.mock('./db', () => ({
-  db: { collection: jest.fn(() => mockDeckCollRef) },
+  db: {
+    collection: jest.fn(() => mockDeckCollRef),
+    batch: jest.fn(() => mockBatch),
+  },
 }));
 
 jest.mock('./deckService', () => ({
@@ -26,7 +35,7 @@ jest.mock('./deckService', () => ({
 }));
 
 const { updateDeck } = require('./deckService');
-const { listSnapshots, createSnapshot, revertToSnapshot } = require('./snapshotService');
+const { listSnapshots, createSnapshot, revertToSnapshot, deleteSnapshotsAfter } = require('./snapshotService');
 
 const DECK_ID = 'deck-abc';
 const SNAP_ID = 'snap-xyz';
@@ -37,6 +46,7 @@ beforeEach(() => {
   mockDeckDocRef.collection.mockReturnValue(mockSnapshotsRef);
   mockSnapshotsRef.orderBy.mockReturnValue(mockOrderByRef);
   mockSnapshotsRef.doc.mockReturnValue(mockSnapshotDocRef);
+  mockSnapshotsRef.where.mockReturnValue(mockWhereRef);
 });
 
 // ── listSnapshots ─────────────────────────────────────────────────────────────
@@ -149,6 +159,57 @@ describe('revertToSnapshot(deckId, snapshotId)', () => {
     mockSnapshotDocRef.get.mockResolvedValue({ exists: true, data: () => snapData });
     updateDeck.mockResolvedValue({});
     await revertToSnapshot(DECK_ID, SNAP_ID);
+    expect(mockSnapshotsRef.doc).toHaveBeenCalledWith(SNAP_ID);
+  });
+});
+
+// ── deleteSnapshotsAfter ──────────────────────────────────────────────────────
+
+describe('deleteSnapshotsAfter(deckId, snapshotId)', () => {
+  const pivotData = { createdAt: '2026-04-16T10:00:00.000Z', cards: [], sideboard: [], format: 'Modern', notes: '' };
+
+  it('throws when the pivot snapshot does not exist', async () => {
+    mockSnapshotDocRef.get.mockResolvedValue({ exists: false });
+    await expect(deleteSnapshotsAfter(DECK_ID, 'missing')).rejects.toThrow('Snapshot not found: missing');
+  });
+
+  it('queries snapshots with createdAt greater than the pivot', async () => {
+    mockSnapshotDocRef.get.mockResolvedValue({ exists: true, data: () => pivotData });
+    mockWhereRef.get.mockResolvedValue({ docs: [] });
+    await deleteSnapshotsAfter(DECK_ID, SNAP_ID);
+    expect(mockSnapshotsRef.where).toHaveBeenCalledWith('createdAt', '>', pivotData.createdAt);
+  });
+
+  it('returns { deleted: 0 } when no snapshots are newer', async () => {
+    mockSnapshotDocRef.get.mockResolvedValue({ exists: true, data: () => pivotData });
+    mockWhereRef.get.mockResolvedValue({ docs: [] });
+    const result = await deleteSnapshotsAfter(DECK_ID, SNAP_ID);
+    expect(result).toEqual({ deleted: 0 });
+  });
+
+  it('batch-deletes all newer snapshots and returns the count', async () => {
+    const fakeRef1 = {};
+    const fakeRef2 = {};
+    mockSnapshotDocRef.get.mockResolvedValue({ exists: true, data: () => pivotData });
+    mockWhereRef.get.mockResolvedValue({
+      docs: [{ ref: fakeRef1 }, { ref: fakeRef2 }],
+    });
+    const { db } = require('./db');
+    const result = await deleteSnapshotsAfter(DECK_ID, SNAP_ID);
+    expect(db.batch).toHaveBeenCalled();
+    expect(mockBatch.delete).toHaveBeenCalledWith(fakeRef1);
+    expect(mockBatch.delete).toHaveBeenCalledWith(fakeRef2);
+    expect(mockBatch.commit).toHaveBeenCalled();
+    expect(result).toEqual({ deleted: 2 });
+  });
+
+  it('reads from the correct snapshot doc path', async () => {
+    const { db } = require('./db');
+    mockSnapshotDocRef.get.mockResolvedValue({ exists: true, data: () => pivotData });
+    mockWhereRef.get.mockResolvedValue({ docs: [] });
+    await deleteSnapshotsAfter(DECK_ID, SNAP_ID);
+    expect(db.collection).toHaveBeenCalledWith('mtg-deck-handler');
+    expect(mockDeckCollRef.doc).toHaveBeenCalledWith(DECK_ID);
     expect(mockSnapshotsRef.doc).toHaveBeenCalledWith(SNAP_ID);
   });
 });

@@ -51,4 +51,26 @@ async function revertToSnapshot(deckId, snapshotId) {
   return updateDeck(deckId, { cards, sideboard, format, notes });
 }
 
-module.exports = { listSnapshots, createSnapshot, revertToSnapshot };
+/**
+ * Deletes all snapshots for a deck that were created after the given pivot snapshot.
+ * Used to prune "future" history when the user makes new edits after a restore.
+ * @param {string} deckId
+ * @param {string} snapshotId - the pivot; snapshots strictly newer than this are deleted
+ * @returns {Promise<{ deleted: number }>}
+ */
+async function deleteSnapshotsAfter(deckId, snapshotId) {
+  const ref = snapshotsRef(deckId);
+  const pivotDoc = await ref.doc(snapshotId).get();
+  if (!pivotDoc.exists) throw new Error(`Snapshot not found: ${snapshotId}`);
+  const { createdAt } = pivotDoc.data();
+
+  const querySnap = await ref.where('createdAt', '>', createdAt).get();
+  if (querySnap.docs.length === 0) return { deleted: 0 };
+
+  const batch = db.batch();
+  querySnap.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+  return { deleted: querySnap.docs.length };
+}
+
+module.exports = { listSnapshots, createSnapshot, revertToSnapshot, deleteSnapshotsAfter };
