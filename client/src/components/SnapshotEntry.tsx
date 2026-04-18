@@ -9,6 +9,7 @@ interface SnapshotEntryProps {
   winsAtPoint: number
   lossesAtPoint: number
   onRevert: () => void
+  isCurrent?: boolean
 }
 
 function formatSnapshotDate(iso: string): string {
@@ -28,6 +29,7 @@ export default function SnapshotEntry({
   winsAtPoint,
   lossesAtPoint,
   onRevert,
+  isCurrent = false,
 }: SnapshotEntryProps) {
   const [expanded, setExpanded] = useState(false)
 
@@ -103,14 +105,20 @@ export default function SnapshotEntry({
           )}
         </div>
 
-        {/* Right: Restore button */}
-        <button
-          type="button"
-          onClick={onRevert}
-          className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          Restore
-        </button>
+        {/* Right: Current badge or Restore button */}
+        {isCurrent ? (
+          <span className="shrink-0 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400">
+            Current
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onRevert}
+            className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            Restore
+          </button>
+        )}
       </div>
     </div>
   )

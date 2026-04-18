@@ -94,7 +94,9 @@ describe('DeckHistory — list rendering', () => {
   it('renders one SnapshotEntry per snapshot', () => {
     mockUseSnapshotsResult.snapshots = [SNAPSHOT_LATE, SNAPSHOT_EARLY]
     render(<DeckHistory deckId="deck-1" games={[]} onRevert={vi.fn()} />)
-    expect(screen.getAllByRole('button', { name: /restore/i })).toHaveLength(2)
+    // Newest (index 0) gets "Current" badge; older entries get "Restore" button
+    expect(screen.getByText('Current')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /restore/i })).toHaveLength(1)
   })
 })
 
@@ -138,7 +140,8 @@ describe('DeckHistory — revert', () => {
       cards: [], sideboard: [], created_at: '', updated_at: '',
     }
     mockRevertSnapshot.mockResolvedValueOnce(updatedDeck)
-    mockUseSnapshotsResult.snapshots = [SNAPSHOT_EARLY]
+    // Two snapshots: SNAPSHOT_LATE is current (index 0), SNAPSHOT_EARLY gets Restore button
+    mockUseSnapshotsResult.snapshots = [SNAPSHOT_LATE, SNAPSHOT_EARLY]
     const onRevert = vi.fn()
     render(<DeckHistory deckId="deck-1" games={[]} onRevert={onRevert} />)
     fireEvent.click(screen.getByRole('button', { name: /restore/i }))
@@ -147,7 +150,8 @@ describe('DeckHistory — revert', () => {
 
   it('does not call onRevert when revert returns null', async () => {
     mockRevertSnapshot.mockResolvedValueOnce(null)
-    mockUseSnapshotsResult.snapshots = [SNAPSHOT_EARLY]
+    // Two snapshots: SNAPSHOT_LATE is current (index 0), SNAPSHOT_EARLY gets Restore button
+    mockUseSnapshotsResult.snapshots = [SNAPSHOT_LATE, SNAPSHOT_EARLY]
     const onRevert = vi.fn()
     render(<DeckHistory deckId="deck-1" games={[]} onRevert={onRevert} />)
     fireEvent.click(screen.getByRole('button', { name: /restore/i }))

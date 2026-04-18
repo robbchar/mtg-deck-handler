@@ -196,6 +196,43 @@ describe('SnapshotEntry — expand/collapse', () => {
   })
 })
 
+// ── isCurrent ────────────────────────────────────────────────────────────────
+
+describe('SnapshotEntry — isCurrent', () => {
+  it('shows a "Current" badge and no Restore button when isCurrent is true', () => {
+    render(
+      <SnapshotEntry
+        snapshot={SNAPSHOT}
+        diff={[]}
+        formatChange={null}
+        notesChanged={false}
+        winsAtPoint={0}
+        lossesAtPoint={0}
+        onRevert={vi.fn()}
+        isCurrent={true}
+      />,
+    )
+    expect(screen.getByText('Current')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /restore/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the Restore button when isCurrent is false (default)', () => {
+    render(
+      <SnapshotEntry
+        snapshot={SNAPSHOT}
+        diff={[]}
+        formatChange={null}
+        notesChanged={false}
+        winsAtPoint={0}
+        lossesAtPoint={0}
+        onRevert={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: /restore/i })).toBeInTheDocument()
+    expect(screen.queryByText('Current')).not.toBeInTheDocument()
+  })
+})
+
 // ── revert ────────────────────────────────────────────────────────────────────
 
 describe('SnapshotEntry — revert', () => {

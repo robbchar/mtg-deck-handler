@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import Spinner from './Spinner'
 import SnapshotEntry from './SnapshotEntry'
 import { useSnapshots } from '../hooks/useSnapshots'
@@ -94,37 +95,53 @@ export default function DeckHistory({ deckId, games, onRevert }: DeckHistoryProp
   // snapshots is ordered newest → oldest (API contract)
   // For diffs: compare each snapshot to its predecessor (the next in the array)
   return (
-    <div className="space-y-3">
-      {snapshots.map((snapshot, index) => {
-        const previous = snapshots[index + 1] ?? null
-        const diff = computeDiff(snapshot, previous)
-        const { wins, losses } = wlAtPoint(games, snapshot.createdAt)
+    <div>
+      <p className="mb-4 text-sm text-gray-500">
+        Checkpoints are saved automatically after a period of inactivity. Click{' '}
+        <span className="font-medium text-gray-700">Restore</span> on any entry to roll your deck
+        back to that state — edits after a restore will remove any checkpoints that followed it.
+      </p>
+      <div>
+        {snapshots.map((snapshot, index) => {
+          const previous = snapshots[index + 1] ?? null
+          const diff = computeDiff(snapshot, previous)
+          const { wins, losses } = wlAtPoint(games, snapshot.createdAt)
 
-        const formatChange =
-          previous && snapshot.format !== previous.format
-            ? `${previous.format || '—'} → ${snapshot.format || '—'}`
-            : null
+          const formatChange =
+            previous && snapshot.format !== previous.format
+              ? `${previous.format || '—'} → ${snapshot.format || '—'}`
+              : null
 
-        const notesChanged = previous ? snapshot.notes !== previous.notes : false
+          const notesChanged = previous ? snapshot.notes !== previous.notes : false
 
-        async function handleRevert() {
-          const deck = await revertSnapshot(snapshot.id)
-          if (deck) onRevert(deck, snapshot)
-        }
+          async function handleRevert() {
+            const deck = await revertSnapshot(snapshot.id)
+            if (deck) onRevert(deck, snapshot)
+          }
 
-        return (
-          <SnapshotEntry
-            key={snapshot.id}
-            snapshot={snapshot}
-            diff={diff}
-            formatChange={formatChange}
-            notesChanged={notesChanged}
-            winsAtPoint={wins}
-            lossesAtPoint={losses}
-            onRevert={handleRevert}
-          />
-        )
-      })}
+          return (
+            <Fragment key={snapshot.id}>
+              {index > 0 && (
+                <div className="flex flex-col items-center py-0.5">
+                  <div className="h-2 w-px bg-gray-200" />
+                  <span className="text-xs leading-none text-gray-300">↑</span>
+                  <div className="h-2 w-px bg-gray-200" />
+                </div>
+              )}
+              <SnapshotEntry
+                snapshot={snapshot}
+                diff={diff}
+                formatChange={formatChange}
+                notesChanged={notesChanged}
+                winsAtPoint={wins}
+                lossesAtPoint={losses}
+                onRevert={handleRevert}
+                isCurrent={index === 0}
+              />
+            </Fragment>
+          )
+        })}
+      </div>
     </div>
   )
 }
