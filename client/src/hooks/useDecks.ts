@@ -79,7 +79,7 @@ export function useDecks() {
     return () => {
       cancelled = true
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dispatch])
 
   /** Re-fetch the deck list (e.g. after a network error). */
   const refetch = useCallback(() => fetchDecks(), [fetchDecks])

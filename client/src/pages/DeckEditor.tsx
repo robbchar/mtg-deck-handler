@@ -197,9 +197,6 @@ function DeckEditor() {
         updateDeckRef.current(id, snapshot)
       }
     },
-    // `id` is the only reactive value that should trigger re-registration.
-    // `updateDeckRef` is a ref — intentionally not listed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [id],
   )
 
@@ -250,11 +247,7 @@ function DeckEditor() {
     return () => {
       cancelled = true
     }
-    // getDeck is intentionally omitted: it changes identity when `decks` list
-    // changes (useCallback dep), which would cause infinite re-fetches.
-    // The deck is identified by `id` alone.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, getDeck])
 
   // ── Name editing handlers ─────────────────────────────────────────────────
 

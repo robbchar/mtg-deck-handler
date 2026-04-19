@@ -12,8 +12,8 @@ vi.mock('../firebase', () => ({
   },
 }))
 
-// Import after mocks are set up
-let client: typeof import('./client').default
+// Import after mocks are set up — assigned for side effect (interceptor re-registration)
+let _client: typeof import('./client').default
 let capturedInterceptor: ((config: Record<string, unknown>) => Promise<Record<string, unknown>>) | null = null
 
 vi.mock('axios', () => {
@@ -39,7 +39,7 @@ beforeEach(async () => {
   vi.resetModules()
   // Re-import to re-register interceptor
   const mod = await import('./client')
-  client = mod.default
+  _client = mod.default
 })
 
 describe('api/client interceptor', () => {
