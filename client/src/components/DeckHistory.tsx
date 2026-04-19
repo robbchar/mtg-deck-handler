@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import Spinner from './Spinner'
 import SnapshotEntry from './SnapshotEntry'
 import { useSnapshots } from '../hooks/useSnapshots'
@@ -80,6 +80,7 @@ const Connector = () => (
 
 export default function DeckHistory({ deckId, games, currentState, activeSnapshotId, onRevert }: DeckHistoryProps) {
   const { snapshots, loading, error, revertSnapshot } = useSnapshots(deckId)
+  const [pendingExpanded, setPendingExpanded] = useState(false)
 
   // Compute pending diff: current deck state vs the most recent snapshot (or empty).
   // Reuses computeDiff by treating currentState as a synthetic snapshot.
@@ -167,11 +168,38 @@ export default function DeckHistory({ deckId, games, currentState, activeSnapsho
                         <span>·</span>
                         {pendingAdded > 0 && <span className="text-green-600">+{pendingAdded} added</span>}
                         {pendingRemoved > 0 && <span className="text-red-400">−{pendingRemoved} removed</span>}
+                        <button
+                          type="button"
+                          onClick={() => setPendingExpanded((v) => !v)}
+                          className="font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none"
+                          aria-label={pendingExpanded ? 'hide' : 'show'}
+                        >
+                          {pendingExpanded ? '▾ hide' : '▸ show'}
+                        </button>
                       </>
                     )}
                     {pendingFormatChange && <span className="text-gray-400">· {pendingFormatChange}</span>}
                     {pendingNotesChanged && <span className="text-gray-400">· notes changed</span>}
                   </div>
+                  {pendingExpanded && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {pendingDiff.map((d) => {
+                        const isAdditional = d.delta > 0 && (d.previousQuantity ?? 0) > 0
+                        return (
+                          <span
+                            key={`${d.section}-${d.name}`}
+                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                              d.delta > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                            }`}
+                          >
+                            <span>{d.delta > 0 ? `+${d.delta}` : d.delta}</span>{' '}
+                            {isAdditional && <span className="opacity-60">additional </span>}
+                            <span>{d.name}</span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
                 <span className="shrink-0 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400">
                   Current
