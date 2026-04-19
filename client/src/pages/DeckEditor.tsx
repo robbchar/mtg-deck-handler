@@ -707,6 +707,7 @@ function DeckEditor() {
         <DeckHistory
           deckId={id!}
           games={games}
+          currentState={{ cards: mainboard, sideboard, format, notes: notesRef.current }}
           activeSnapshotId={activeSnapshotId}
           onRevert={handleRevert}
         />

@@ -2,11 +2,19 @@ import { Fragment } from 'react'
 import Spinner from './Spinner'
 import SnapshotEntry from './SnapshotEntry'
 import { useSnapshots } from '../hooks/useSnapshots'
-import type { DeckSnapshot, CardDiff, GameEntry, Deck } from '../types'
+import type { CardEntry, DeckSnapshot, CardDiff, GameEntry, Deck } from '../types'
+
+interface CurrentState {
+  cards: CardEntry[]
+  sideboard: CardEntry[]
+  format: string
+  notes: string
+}
 
 interface DeckHistoryProps {
   deckId: string
   games: GameEntry[]
+  currentState: CurrentState
   activeSnapshotId?: string | null
   onRevert: (deck: Deck, snapshot: DeckSnapshot) => void
 }
@@ -62,11 +70,40 @@ function wlAtPoint(games: GameEntry[], cutoff: string) {
   }
 }
 
-export default function DeckHistory({ deckId, games, activeSnapshotId, onRevert }: DeckHistoryProps) {
+const Connector = () => (
+  <div className="flex flex-col items-center py-0.5">
+    <div className="h-2 w-px bg-gray-200" />
+    <span className="text-xs leading-none text-gray-300">↑</span>
+    <div className="h-2 w-px bg-gray-200" />
+  </div>
+)
+
+export default function DeckHistory({ deckId, games, currentState, activeSnapshotId, onRevert }: DeckHistoryProps) {
   const { snapshots, loading, error, revertSnapshot } = useSnapshots(deckId)
-  // Fall back to the newest snapshot when the server hasn't set activeSnapshotId yet
-  // (e.g. decks created before this feature was added).
-  const currentSnapshotId = activeSnapshotId ?? snapshots[0]?.id ?? null
+
+  // Compute pending diff: current deck state vs the most recent snapshot (or empty).
+  // Reuses computeDiff by treating currentState as a synthetic snapshot.
+  const syntheticCurrent: DeckSnapshot = {
+    id: 'pending',
+    createdAt: '',
+    cards: currentState.cards,
+    sideboard: currentState.sideboard,
+    format: currentState.format,
+    notes: currentState.notes,
+  }
+  const pendingDiff = computeDiff(syntheticCurrent, snapshots[0] ?? null)
+  const pendingFormatChange =
+    snapshots.length > 0 && currentState.format !== snapshots[0].format
+      ? `${snapshots[0].format || '—'} → ${currentState.format || '—'}`
+      : null
+  const pendingNotesChanged = snapshots.length > 0 && currentState.notes !== snapshots[0].notes
+  const hasPendingChanges = pendingDiff.length > 0 || !!pendingFormatChange || pendingNotesChanged
+
+  const pendingAdded = pendingDiff.filter((d) => d.delta > 0).reduce((s, d) => s + d.delta, 0)
+  const pendingRemoved = pendingDiff.filter((d) => d.delta < 0).reduce((s, d) => s + Math.abs(d.delta), 0)
+  const pendingTotalCards =
+    currentState.cards.reduce((s, c) => s + c.quantity, 0) +
+    currentState.sideboard.reduce((s, c) => s + c.quantity, 0)
 
   if (loading) {
     return (
@@ -88,13 +125,17 @@ export default function DeckHistory({ deckId, games, activeSnapshotId, onRevert 
     )
   }
 
-  if (snapshots.length === 0) {
+  // Only show the "no history yet" empty state when there are also no pending changes.
+  if (snapshots.length === 0 && !hasPendingChanges) {
     return (
       <div className="py-16 text-center text-sm text-gray-400">
         No history yet — changes will appear here after your first editing session.
       </div>
     )
   }
+
+  // When there are pending changes, no committed snapshot is "current".
+  const currentSnapshotId = hasPendingChanges ? null : (activeSnapshotId ?? snapshots[0]?.id ?? null)
 
   // snapshots is ordered newest → oldest (API contract)
   // For diffs: compare each snapshot to its predecessor (the next in the array)
@@ -106,6 +147,39 @@ export default function DeckHistory({ deckId, games, activeSnapshotId, onRevert 
         back to that state — edits after a restore will remove any checkpoints that followed it.
       </p>
       <div>
+        {/* Pending (unsaved) entry */}
+        {hasPendingChanges && (
+          <Fragment>
+            <div
+              className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4"
+              data-testid="pending-entry"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 text-sm font-semibold text-gray-500">Working changes</div>
+                  <div className="mb-2 flex flex-wrap items-center gap-x-2 text-xs text-gray-400">
+                    <span>{pendingTotalCards} cards</span>
+                    {pendingDiff.length > 0 && (
+                      <>
+                        <span>·</span>
+                        {pendingAdded > 0 && <span className="text-green-600">+{pendingAdded} added</span>}
+                        {pendingRemoved > 0 && <span className="text-red-400">−{pendingRemoved} removed</span>}
+                      </>
+                    )}
+                    {pendingFormatChange && <span>· {pendingFormatChange}</span>}
+                    {pendingNotesChanged && <span>· notes changed</span>}
+                  </div>
+                  <div className="text-xs text-gray-400">Not yet saved as a checkpoint</div>
+                </div>
+                <span className="shrink-0 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400">
+                  Current
+                </span>
+              </div>
+            </div>
+            {snapshots.length > 0 && <Connector />}
+          </Fragment>
+        )}
+
         {snapshots.map((snapshot, index) => {
           const previous = snapshots[index + 1] ?? null
           const diff = computeDiff(snapshot, previous)
@@ -125,13 +199,7 @@ export default function DeckHistory({ deckId, games, activeSnapshotId, onRevert 
 
           return (
             <Fragment key={snapshot.id}>
-              {index > 0 && (
-                <div className="flex flex-col items-center py-0.5">
-                  <div className="h-2 w-px bg-gray-200" />
-                  <span className="text-xs leading-none text-gray-300">↑</span>
-                  <div className="h-2 w-px bg-gray-200" />
-                </div>
-              )}
+              {index > 0 && <Connector />}
               <SnapshotEntry
                 snapshot={snapshot}
                 diff={diff}
