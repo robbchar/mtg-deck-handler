@@ -156,8 +156,11 @@ export default function DeckHistory({ deckId, games, currentState, activeSnapsho
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1 text-sm font-semibold text-gray-500">Working changes</div>
-                  <div className="mb-2 flex flex-wrap items-center gap-x-2 text-xs text-gray-400">
+                  <div className="mb-1 text-sm font-semibold text-gray-500">
+                    Working changes
+                    <span className="ml-2 text-xs font-normal text-gray-400">· not yet checkpointed</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
                     <span>{pendingTotalCards} cards</span>
                     {pendingDiff.length > 0 && (
                       <>
@@ -166,10 +169,9 @@ export default function DeckHistory({ deckId, games, currentState, activeSnapsho
                         {pendingRemoved > 0 && <span className="text-red-400">−{pendingRemoved} removed</span>}
                       </>
                     )}
-                    {pendingFormatChange && <span>· {pendingFormatChange}</span>}
-                    {pendingNotesChanged && <span>· notes changed</span>}
+                    {pendingFormatChange && <span className="text-gray-400">· {pendingFormatChange}</span>}
+                    {pendingNotesChanged && <span className="text-gray-400">· notes changed</span>}
                   </div>
-                  <div className="text-xs text-gray-400">Not yet saved as a checkpoint</div>
                 </div>
                 <span className="shrink-0 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-400">
                   Current
