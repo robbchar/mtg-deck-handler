@@ -1,12 +1,12 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import axios from 'axios'
+import client from '../api/client'
 import ImportModal from './ImportModal'
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
-vi.mock('axios', () => ({
+vi.mock('../api/client', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
@@ -16,10 +16,10 @@ vi.mock('axios', () => ({
 }))
 
 const mockedAxios = {
-  get: vi.mocked(axios.get),
-  post: vi.mocked(axios.post),
-  put: vi.mocked(axios.put),
-  delete: vi.mocked(axios.delete),
+  get: vi.mocked(client.get),
+  post: vi.mocked(client.post),
+  put: vi.mocked(client.put),
+  delete: vi.mocked(client.delete),
 }
 
 const mockNavigate = vi.fn()
@@ -230,7 +230,7 @@ describe('ImportModal — empty textarea validation', () => {
     })
     fireEvent.click(screen.getByTestId('import-submit-button'))
     expect(screen.getByTestId('import-validation-error')).toBeInTheDocument()
-    expect(axios.post).not.toHaveBeenCalled()
+    expect(client.post).not.toHaveBeenCalled()
   })
 
   it('validation message has role="alert"', () => {
@@ -255,7 +255,7 @@ describe('ImportModal — empty textarea validation', () => {
     fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
     fireEvent.click(screen.getByTestId('import-submit-button'))
     expect(screen.getByTestId('import-validation-error')).toBeInTheDocument()
-    expect(axios.post).not.toHaveBeenCalled()
+    expect(client.post).not.toHaveBeenCalled()
   })
 })
 
@@ -281,12 +281,12 @@ describe('ImportModal — successful import', () => {
     fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: textValue } })
     fireEvent.click(screen.getByTestId('import-submit-button'))
 
-    await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(client.post).toHaveBeenCalledTimes(1))
   }
 
   it('calls POST /api/import with text, name, and format', async () => {
     await importDeck()
-    expect(axios.post).toHaveBeenCalledWith('/api/import', {
+    expect(client.post).toHaveBeenCalledWith('/api/import', {
       text: VALID_TEXT,
       name: 'Mono Red',
       format: 'standard',
@@ -295,7 +295,7 @@ describe('ImportModal — successful import', () => {
 
   it('trims whitespace from name before sending', async () => {
     await importDeck({ deckNameValue: '  Mono Red  ', formatValue: 'modern' })
-    expect(axios.post).toHaveBeenCalledWith('/api/import', {
+    expect(client.post).toHaveBeenCalledWith('/api/import', {
       text: VALID_TEXT,
       name: 'Mono Red',
       format: 'modern',
@@ -304,7 +304,7 @@ describe('ImportModal — successful import', () => {
 
   it('sends empty string for format when not provided', async () => {
     await importDeck({ formatValue: '' })
-    expect(axios.post).toHaveBeenCalledWith('/api/import', {
+    expect(client.post).toHaveBeenCalledWith('/api/import', {
       text: VALID_TEXT,
       name: 'Mono Red',
       format: '',
@@ -392,7 +392,7 @@ describe('ImportModal — failed import', () => {
     fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
     fireEvent.click(screen.getByTestId('import-submit-button'))
 
-    await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(client.post).toHaveBeenCalledTimes(1))
     expect(mockNavigate).not.toHaveBeenCalled()
   })
 

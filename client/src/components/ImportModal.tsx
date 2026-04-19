@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import client from '../api/client'
 import { parseMtgaText } from '../utils/mtgaFormat'
 import CloseButton from './CloseButton'
 import FormatSelect from './FormatSelect'
@@ -94,7 +94,7 @@ function ImportModal({ isOpen, onClose }: ImportModalProps) {
     setImporting(true)
 
     try {
-      const { data } = await axios.post<{ id: string }>('/api/import', {
+      const { data } = await client.post<{ id: string }>('/api/import', {
         text,
         name: deckName.trim(),
         format: format.trim(),
