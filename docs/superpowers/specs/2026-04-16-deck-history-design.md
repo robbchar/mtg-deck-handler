@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-16
 **Branch target:** `feat/deck-history`
-**Status:** Approved
+**Status:** Implemented — see implementation notes below for deviations from this spec
 
 ---
 
@@ -60,13 +60,16 @@ No label field. No reference to the parent deck ID (implicit from subcollection 
 
 ```ts
 interface CardDiff {
-  name:     string
-  delta:    number   // positive = added, negative = removed
-  section:  'mainboard' | 'sideboard'
+  name:             string
+  delta:            number   // positive = added, negative = removed
+  section:          'mainboard' | 'sideboard'
+  previousQuantity: number   // 0 means brand-new card; used to label "additional" copies
 }
 ```
 
 Format and notes changes are also surfaced if they differ between consecutive snapshots.
+
+**`activeSnapshotId` (not in original spec):** A field on the deck document itself, set server-side on every `createSnapshot` and `revertToSnapshot` call. Persists across page reloads. The client reads it on deck load and passes it as a prop to `DeckHistory`, which uses it to mark the "Current" badge — avoiding brittle client-side state that resets on component remount.
 
 ---
 
@@ -80,7 +83,8 @@ All routes are mounted under `/api/decks/:id/snapshots` and protected by `requir
 |--------|------|-------------|
 | `GET` | `/api/decks/:id/snapshots` | List all snapshots for a deck, ordered by `createdAt` descending |
 | `POST` | `/api/decks/:id/snapshots` | Create a snapshot. Body: `{ cards, sideboard, format, notes }` |
-| `POST` | `/api/decks/:id/snapshots/:snapshotId/revert` | Revert deck to snapshot state. Calls `updateDeck` with snapshot fields |
+| `POST` | `/api/decks/:id/snapshots/:snapshotId/revert` | Revert deck to snapshot state. Calls `updateDeck` with snapshot fields + `activeSnapshotId` |
+| `DELETE` | `/api/decks/:id/snapshots/after/:snapshotId` | **Added post-spec:** Delete all snapshots created after `snapshotId`. Called by client after a successful revert to prune the now-invalidated future checkpoints. |
 
 ### New service
 
@@ -119,30 +123,34 @@ Mirrors `useGames`. Located at `client/src/hooks/useSnapshots.ts`.
 
 ```ts
 interface UseSnapshotsResult {
-  snapshots:  DeckSnapshot[]
-  loading:    boolean
-  error:      string | null
-  revert:     (snapshotId: string) => Promise<void>
+  snapshots:       DeckSnapshot[]
+  loading:         boolean
+  error:           string | null
+  revertSnapshot:  (snapshotId: string) => Promise<Deck | null>
 }
 ```
 
-`revert` calls the revert endpoint then re-fetches the deck via the existing `useDecks` mechanism (invalidate / refetch).
+`revertSnapshot` (renamed from `revert` in the spec) calls the revert endpoint and returns the updated `Deck` object (or `null` on failure). The caller (`DeckHistory` → `DeckEditor`) uses the returned deck to update `activeSnapshotId` state and the deck editor fields. The hook also re-fetches snapshots after a successful revert to refresh the timeline.
 
 ### New components
 
 **`DeckHistory`** (`client/src/components/DeckHistory.tsx`)
 
-The history tab panel. Calls `useSnapshots(deckId)` internally for snapshot data. Receives `games` as a prop (already loaded by `DeckEditor`). Props: `deckId`, `games`, `onRevert`. Renders a list of `SnapshotEntry` rows. Computes diffs and W/L counts internally before passing them down. Shows a loading spinner, empty state ("No history yet — changes will appear here after your first editing session"), and error state.
+The history tab panel. Calls `useSnapshots(deckId)` internally for snapshot data. Receives `games`, `currentState`, `activeSnapshotId`, and `onRevert` as props from `DeckEditor`. Renders:
+- A pending "Working changes" entry (dashed border) when `currentState` differs from the latest snapshot — covers the gap between edits and the next checkpoint. Also shown for fresh decks with cards but no snapshots yet.
+- A list of `SnapshotEntry` rows connected by upward-arrow `Connector` elements.
+- Loading, empty ("No history yet — changes will appear here after your first editing session"), and error states.
+- Empty state is suppressed when there are pending changes (so a first-time user with unsaved cards still sees the pending entry, not "no history").
 
 **`SnapshotEntry`** (`client/src/components/SnapshotEntry.tsx`)
 
-One history row. Props: `snapshot`, `diff: CardDiff[]`, `formatChange`, `notesChanged`, `winsAtPoint`, `lossesAtPoint`, `onRevert`.
+One history row. Props: `snapshot`, `diff: CardDiff[]`, `formatChange`, `notesChanged`, `winsAtPoint`, `lossesAtPoint`, `onRevert`, `isCurrent`.
 
 Layout:
-- **Left:** Timestamp (e.g. "Apr 16 · 2:14 PM"), card count, `{W}W – {L}L` in green/red
+- **Left:** Timestamp (e.g. "Apr 16 · 2:14 PM"), card count, `{W}W {L}L` in green/red
 - **Collapsed diff:** Aggregate counts (`+2 added · −4 removed`) with a `▸ show` expand toggle. If format changed, appended inline. If no changes vs previous snapshot (e.g. a revert created an identical state), shows "No card changes".
-- **Expanded diff:** Named card chips, green for added, red for removed, per card name with quantity delta.
-- **Right:** Revert button (indigo, confirms with a brief "Reverted" toast on success)
+- **Expanded diff:** Named card chips, green for added, red for removed, with quantity delta. Chips labelled "additional" when the card already existed in the prior snapshot.
+- **Right:** `Restore` button (indigo) when `isCurrent` is false; muted `Current` badge when true. (Renamed from "Revert" → "Restore" in final implementation.)
 
 ### `DeckEditor` changes
 
@@ -162,9 +170,11 @@ Underline tab style: active tab has an indigo bottom border, inactive is muted g
 
 ---
 
-## Revert confirmation
+## Restore confirmation
 
-No modal confirmation dialog — the Revert button triggers immediately and shows a toast ("Deck reverted to [timestamp]"). This matches the app's existing pattern (no confirmation dialogs for destructive-ish actions). The previous state is itself captured as a snapshot by the inactivity timer, so the revert is effectively undoable.
+No modal confirmation dialog — the Restore button (formerly "Revert" in this spec) triggers immediately and shows a toast ("Deck restored to [timestamp]"). This matches the app's existing pattern (no confirmation dialogs for destructive-ish actions).
+
+After a successful restore, the client fires `DELETE /snapshots/after/:snapshotId` to prune checkpoints that are now ahead of the restored point. The prune is fire-and-forget (errors are silent) and does not block the snapshot timer from creating a new checkpoint on the next inactivity window.
 
 ---
 

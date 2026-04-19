@@ -533,6 +533,57 @@ Produced:
 
 ---
 
+---
+
+## Milestone 5: Deck History + Snapshots
+> Goal: Players can see a timeline of their deck's evolution, compare changes between sessions, correlate W/L performance with specific configurations, and restore any past snapshot.
+
+### Task 5.1 — Snapshot service + routes
+**Status:** complete
+
+Produced:
+- `server/services/snapshotService.js` — `listSnapshots`, `createSnapshot`, `revertToSnapshot`, `deleteSnapshotsAfter`
+- `server/services/snapshotService.test.js`
+- `server/routes/snapshots.js` — GET/POST snapshots, POST revert, DELETE after/:snapshotId
+- `server/routes/snapshots.test.js`
+
+`createSnapshot` and `revertToSnapshot` both call `updateDeck` with `{ activeSnapshotId }` so the deck document always reflects the current checkpoint.
+
+### Task 5.2 — `useSnapshots` hook
+**Status:** complete
+
+Produced:
+- `client/src/hooks/useSnapshots.ts` — fetches snapshot list; exposes `revertSnapshot(id)` which calls the revert endpoint and re-fetches both the deck and snapshot list on success
+- `client/src/hooks/useSnapshots.test.tsx`
+
+### Task 5.3 — `SnapshotEntry` component
+**Status:** complete
+
+Produced:
+- `client/src/components/SnapshotEntry.tsx`
+- `client/src/components/SnapshotEntry.test.tsx`
+
+### Task 5.4 — `DeckHistory` component
+**Status:** complete
+
+Produced:
+- `client/src/components/DeckHistory.tsx` — includes pending "Working changes" entry, `Connector` visual elements, loading/empty/error states, client-side diff and W/L derivation
+- `client/src/components/DeckHistory.test.tsx`
+
+### Task 5.5 — DeckEditor integration
+**Status:** complete
+
+Changes to `client/src/pages/DeckEditor.tsx`:
+- Added tab navigation (Current Deck / Deck History)
+- Added snapshot timer (3-min inactivity → POST snapshot; `beforeunload` keepalive flush)
+- `activeSnapshotId` state populated from deck on load and updated after revert or timer fires
+- `handleRevert` updates deck editor fields + `activeSnapshotId` from returned deck
+
+### ✅ MILESTONE 5 CHECKPOINT
+**Merged to main via PR on feat/deck-history.**
+
+---
+
 ## Agentic Loop Prompt
 
 Use this prompt when invoking the swarm against this task list:
