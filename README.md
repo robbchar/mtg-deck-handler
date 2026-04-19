@@ -1,19 +1,24 @@
 # MTG Deck Manager
 
-A local-first Magic: The Gathering deck management app. Decks are stored as
-JSON files on disk, with a React frontend for editing, notes, and card lookup
-via the Scryfall API. Firebase sync is an optional future layer — the app works
-fully offline without it.
+A Magic: The Gathering deck management app with a React frontend and an Express API backed by Firebase Firestore. Supports full deck editing, game logging, card search via Scryfall, MTGA import/export, and a snapshot-based deck history that lets you track how your deck has evolved over time and restore any past version.
 
 ## Project Structure
 
 ```
 mtg-deck-manager/
-├── client/          # React + Vite frontend (Milestone 3)
+├── client/          # React + Vite frontend
 ├── server/          # Express API server
-│   ├── routes/      # Route handlers (decks, cards, import/export)
-│   ├── services/    # Business logic (file I/O, Scryfall, MTGA format)
-│   │   ├── deckService.js   # Deck CRUD — list, get, create, update, delete
+│   ├── routes/      # Route handlers
+│   │   ├── decks.js         # Deck CRUD routes
+│   │   ├── cards.js         # Scryfall proxy routes
+│   │   ├── games.js         # Game log routes
+│   │   ├── snapshots.js     # Deck history snapshot routes
+│   │   └── importExport.js  # MTGA import/export routes
+│   ├── services/    # Business logic
+│   │   ├── db.js            # Firebase Admin SDK initialisation
+│   │   ├── deckService.js   # Deck CRUD — Firestore reads/writes
+│   │   ├── gameService.js   # Game log CRUD
+│   │   ├── snapshotService.js # Snapshot create/list/revert + timeline pruning
 │   │   ├── cardService.js   # Scryfall cache-first lookup + search
 │   │   └── mtgaService.js   # MTGA text import/export format conversion
 │   ├── middleware/  # Shared middleware
@@ -22,7 +27,6 @@ mtg-deck-manager/
 │   ├── index.js     # App entry point
 │   └── .env.example # Environment variable template
 ├── data/            # Runtime data — gitignored, auto-created on startup
-│   ├── decks/       # One JSON file per deck (UUID v4 named)
 │   └── cache/       # Scryfall card response cache (7-day TTL)
 └── docs/            # Architecture and task documentation
 ```
@@ -75,7 +79,6 @@ All variables live in `server/.env` (copy from `server/.env.example`):
 | `PORT` | `3001` | Express listen port |
 | `DATA_DIR` | `../data` | Path to the data directory (relative to `server/`) |
 | `SCRYFALL_RATE_LIMIT_MS` | `100` | Minimum ms between Scryfall requests (≤ 10 req/s) |
-| `FIREBASE_ENABLED` | `false` | Enable optional Firebase sync (future feature) |
 
 ## Running Tests
 
@@ -176,6 +179,28 @@ Located at `client/src/components/ImportPreview.jsx`.
 
 Rendered inside `ImportModal` when a preview has been generated. Shows the
 card count summary and any unparseable lines (amber warning list).
+
+#### `DeckHistory`
+
+Located at `client/src/components/DeckHistory.tsx`.
+
+History tab panel inside `DeckEditor`. Calls `useSnapshots(deckId)` internally. Receives `games` and `currentState` as props from `DeckEditor`. Renders:
+- **Working changes** — a dashed pending entry showing unsaved edits vs the latest committed snapshot, with an expand/collapse chip list. Appears whenever the live deck state differs from the most recent snapshot. Also shown for first-time decks that have cards but no snapshots yet.
+- **Snapshot entries** — a `SnapshotEntry` per committed snapshot, connected by visual upward arrows, newest first.
+- Loading, empty, and error states.
+
+W/L counts and card diffs are computed entirely client-side — no extra network calls.
+
+#### `SnapshotEntry`
+
+Located at `client/src/components/SnapshotEntry.tsx`.
+
+One row in the history timeline. Props: `snapshot`, `diff`, `formatChange`, `notesChanged`, `winsAtPoint`, `lossesAtPoint`, `onRevert`, `isCurrent`.
+
+- **Left:** Timestamp, card count, `{W}W {L}L` record
+- **Collapsed diff:** `+N added · −M removed` aggregate with a `▸ show` toggle
+- **Expanded diff:** Named chips (green = added, red = removed) with quantity deltas
+- **Right:** Either a `Restore` button (indigo) or a muted `Current` badge when `isCurrent` is true
 
 #### `CardSearch`
 
@@ -337,6 +362,10 @@ Magic: The Gathering Arena for import/export.
 | `POST` | `/api/decks/:id/export` | Export deck as MTGA-format text | ✅ Live |
 | `GET` | `/api/cards/search?q=` | Search Scryfall (cached) | ✅ Live |
 | `GET` | `/api/cards/:id` | Get single card (cache-first) | ✅ Live |
+| `GET` | `/api/decks/:id/snapshots` | List deck snapshots (newest first) | ✅ Live |
+| `POST` | `/api/decks/:id/snapshots` | Create a snapshot of current deck state | ✅ Live |
+| `POST` | `/api/decks/:id/snapshots/:snapshotId/revert` | Revert deck to a past snapshot | ✅ Live |
+| `DELETE` | `/api/decks/:id/snapshots/after/:snapshotId` | Prune snapshots newer than a given snapshot (used after revert) | ✅ Live |
 
 ### Deck endpoints
 
@@ -457,6 +486,7 @@ curl -X POST http://localhost:3001/api/decks/<uuid>/export
   "created_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-20T14:22:00Z",
   "notes": "Main strategy: go fast, burn face.",
+  "activeSnapshotId": "snapshot-uuid",
   "cards": [
     {
       "quantity": 4,
@@ -477,6 +507,8 @@ curl -X POST http://localhost:3001/api/decks/<uuid>/export
   "tags": ["aggro", "burn", "red"]
 }
 ```
+
+`activeSnapshotId` identifies which snapshot represents the current deck state. It is set server-side whenever a new snapshot is created or the deck is reverted to a past snapshot, and used client-side to render the "Current" badge in the history timeline.
 
 The `unknown` array contains the names of cards that could not be resolved
 against the Scryfall cache at import time. It is present on imported decks and

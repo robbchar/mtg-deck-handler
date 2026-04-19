@@ -14,12 +14,18 @@ import GameLogList from '../components/GameLogList'
 import Spinner from '../components/Spinner'
 import FormatSelect from '../components/FormatSelect'
 import UserAvatar from '../components/UserAvatar'
-import type { CardEntry, NewGameEntry, ScryfallCard } from '../types'
+import { auth } from '../firebase'
+import DeckHistory from '../components/DeckHistory'
+import { formatDate } from '../utils'
+import type { CardEntry, NewGameEntry, ScryfallCard, Deck, DeckSnapshot } from '../types'
 
 type ViewMode = 'grid' | 'compact' | 'list'
 
 type LoadState = 'loading' | 'ready' | 'error'
 type ExportStatus = 'idle' | 'copied' | 'error'
+type TabView = 'current' | 'history'
+
+const SNAPSHOT_WINDOW_MS = 3 * 60 * 1000 // 3 minutes
 
 interface DeckPatch {
   name?: string
@@ -88,6 +94,32 @@ function DeckEditor() {
   const pendingRef = useRef<DeckPatch>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // ── Tab state ────────────────────────────────────────────────────────────────
+  const [tabView, setTabView] = useState<TabView>('current')
+
+  // ── Active snapshot ───────────────────────────────────────────────────────────
+  const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null)
+
+  // ── Notes ref (notes not editable in UI, stored from deck load) ───────────────
+  const notesRef = useRef('')
+
+  // ── Snapshot timer ────────────────────────────────────────────────────────────
+  const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const snapshotPendingRef = useRef(false)
+  /** Tracks the snapshot ID the user last restored to, so new edits can prune future history. */
+  const revertedToSnapshotIdRef = useRef<string | null>(null)
+
+  /** Mirrors current deck state into a ref for snapshot timer and beforeunload. */
+  const snapshotDataRef = useRef<{
+    cards: CardEntry[]
+    sideboard: CardEntry[]
+    format: string
+    notes: string
+  }>({ cards: [], sideboard: [], format: '', notes: '' })
+
+  /** Cached Firebase ID token for the beforeunload best-effort flush. */
+  const tokenRef = useRef<string | null>(null)
+
   /**
    * Keep a stable ref to `updateDeck` so the unmount cleanup can call the
    * latest version without needing it as a dep (which would cause the effect
@@ -97,6 +129,14 @@ function DeckEditor() {
   useEffect(() => {
     updateDeckRef.current = updateDeck
   })
+
+  // Keep a cached copy of the Firebase ID token for the beforeunload handler.
+  // onIdTokenChanged fires on sign-in and on every token refresh (~hourly).
+  useEffect(() => {
+    return auth.onIdTokenChanged(async (user) => {
+      tokenRef.current = user ? await user.getIdToken() : null
+    })
+  }, [])
 
   const scheduleAutoSave = useCallback(
     (patch: DeckPatch) => {
@@ -110,6 +150,41 @@ function DeckEditor() {
     },
     [id, updateDeck],
   )
+
+  // Keep snapshotDataRef in sync with the latest state so the timer always
+  // fires with up-to-date data even if state changed after the timer was set.
+  useEffect(() => {
+    snapshotDataRef.current = {
+      cards: mainboard,
+      sideboard,
+      format,
+      notes: notesRef.current,
+    }
+  }, [mainboard, sideboard, format])
+
+  /** Resets the 3-minute inactivity timer that commits a snapshot. */
+  const scheduleSnapshot = useCallback(() => {
+    snapshotPendingRef.current = true
+    if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+    snapshotTimerRef.current = setTimeout(async () => {
+      snapshotPendingRef.current = false
+      if (!id) return
+      if (revertedToSnapshotIdRef.current) {
+        try {
+          await client.delete(`/api/decks/${id}/snapshots/after/${revertedToSnapshotIdRef.current}`)
+        } catch (pruneErr) {
+          console.error('Timeline prune failed silently:', pruneErr)
+        }
+        revertedToSnapshotIdRef.current = null
+      }
+      try {
+        const { data: newSnapshot } = await client.post<DeckSnapshot>(`/api/decks/${id}/snapshots`, snapshotDataRef.current)
+        setActiveSnapshotId(newSnapshot.id)
+      } catch (err) {
+        console.error('Snapshot failed silently:', err)
+      }
+    }, SNAPSHOT_WINDOW_MS)
+  }, [id])
 
   // On unmount (navigation), flush any pending debounced save immediately so
   // no changes are silently discarded when the user navigates away.
@@ -128,6 +203,27 @@ function DeckEditor() {
     [id],
   )
 
+  // Best-effort snapshot on page unload using fetch keepalive.
+  // Failures are silently ignored.
+  useEffect(() => {
+    function handleBeforeUnload() {
+      if (!snapshotPendingRef.current || !id || !tokenRef.current) return
+      snapshotPendingRef.current = false
+      if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+      fetch(`/api/decks/${id}/snapshots`, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokenRef.current}`,
+        },
+        body: JSON.stringify(snapshotDataRef.current),
+      })
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [id])
+
   // ── Load deck on mount ────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -145,6 +241,8 @@ function DeckEditor() {
       setFormat(deck.format ?? '')
       setMainboard(deck.cards ?? [])
       setSideboard(deck.sideboard ?? [])
+      notesRef.current = deck.notes ?? ''
+      setActiveSnapshotId(deck.activeSnapshotId ?? null)
       setLoadState('ready')
     }
 
@@ -164,6 +262,7 @@ function DeckEditor() {
     setIsEditingName(false)
     savedNameRef.current = nameValue
     scheduleAutoSave({ name: nameValue })
+    scheduleSnapshot()
   }
 
   function handleNameBlur() {
@@ -185,6 +284,7 @@ function DeckEditor() {
     const val = e.target.value
     setFormat(val)
     scheduleAutoSave({ format: val })
+    scheduleSnapshot()
   }
 
   // ── Mainboard handlers ────────────────────────────────────────────────────
@@ -195,12 +295,14 @@ function DeckEditor() {
     )
     setMainboard(updated)
     scheduleAutoSave({ cards: updated })
+    scheduleSnapshot()
   }
 
   function handleMainRemove(cardName: string) {
     const updated = mainboard.filter((c) => c.name !== cardName)
     setMainboard(updated)
     scheduleAutoSave({ cards: updated })
+    scheduleSnapshot()
   }
 
   // ── Sideboard handlers ────────────────────────────────────────────────────
@@ -211,12 +313,14 @@ function DeckEditor() {
     )
     setSideboard(updated)
     scheduleAutoSave({ sideboard: updated })
+    scheduleSnapshot()
   }
 
   function handleSideRemove(cardName: string) {
     const updated = sideboard.filter((c) => c.name !== cardName)
     setSideboard(updated)
     scheduleAutoSave({ sideboard: updated })
+    scheduleSnapshot()
   }
 
   // ── Add card from CardSearch ───────────────────────────────────────────────
@@ -244,6 +348,7 @@ function DeckEditor() {
           ]
       setMainboard(updated)
       scheduleAutoSave({ cards: updated })
+      scheduleSnapshot()
     } else {
       const existing = sideboard.find((c) => c.name === card.name)
       const updated: CardEntry[] = existing
@@ -264,6 +369,7 @@ function DeckEditor() {
           ]
       setSideboard(updated)
       scheduleAutoSave({ sideboard: updated })
+      scheduleSnapshot()
     }
   }
 
@@ -272,6 +378,29 @@ function DeckEditor() {
   async function handleLogGame(gameData: NewGameEntry): Promise<boolean> {
     const entry = await addGame(gameData)
     return entry !== null
+  }
+
+  // ── Revert to snapshot ────────────────────────────────────────────────────────
+
+  function handleRevert(deck: Deck, snapshot: DeckSnapshot) {
+    // Cancel any pending auto-save so pre-revert edits don't overwrite the revert
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    pendingRef.current = {}
+    // Cancel any pending snapshot from the pre-revert session
+    if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+    snapshotPendingRef.current = false
+    // Remember where we restored to so the next snapshot creation can prune future history
+    revertedToSnapshotIdRef.current = snapshot.id
+
+    setNameValue(deck.name ?? '')
+    savedNameRef.current = deck.name ?? ''
+    setFormat(deck.format ?? '')
+    setMainboard(deck.cards ?? [])
+    setSideboard(deck.sideboard ?? [])
+    notesRef.current = deck.notes ?? ''
+    setActiveSnapshotId(deck.activeSnapshotId ?? null)
+    setTabView('current')
+    addToast(`Restored to ${formatDate(snapshot.createdAt)}`)
   }
 
   // ── Export to clipboard ───────────────────────────────────────────────────
@@ -458,98 +587,131 @@ function DeckEditor() {
         </div>
       </header>
 
-      {/* ── Game Log ── */}
-      <section className="mb-8" data-testid="game-logger-wrapper">
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Game Log</h2>
-        <div className="mb-4">
-          <GameLogList games={games} />
-        </div>
-        <GameLogger cards={mainboard} onSubmit={handleLogGame} />
-      </section>
+      {/* ── Tab navigation ── */}
+      <div className="mb-6 flex border-b border-gray-200" role="tablist">
+        {(['current', 'history'] as TabView[]).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={tabView === tab}
+            onClick={() => setTabView(tab)}
+            className={`px-4 py-2 text-sm font-medium focus:outline-none ${
+              tabView === tab
+                ? 'border-b-2 border-indigo-600 text-indigo-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            data-testid={`tab-${tab}`}
+          >
+            {tab === 'current' ? 'Current Deck' : 'Deck History'}
+          </button>
+        ))}
+      </div>
 
-      {/* ── Mainboard ── */}
-      <section className="mb-8" data-testid="mainboard-section">
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-gray-900">
-          Mainboard
-          <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
-            {mainTotal}
-          </span>
-        </h2>
+      {tabView === 'current' ? (
+        <>
+          {/* ── Game Log ── */}
+          <section className="mb-8" data-testid="game-logger-wrapper">
+            <h2 className="mb-3 text-lg font-semibold text-gray-900">Game Log</h2>
+            <div className="mb-4">
+              <GameLogList games={games} />
+            </div>
+            <GameLogger cards={mainboard} onSubmit={handleLogGame} />
+          </section>
 
-        {mainboard.length === 0 ? (
-          <p className="text-sm text-gray-400" data-testid="mainboard-empty">
-            No mainboard cards yet. Use + Add Card to get started.
-          </p>
-        ) : viewMode === 'grid' ? (
-          <CardGridView
-            cards={mainboard}
-            onQuantityChange={handleMainQuantityChange}
-            onRemove={handleMainRemove}
-            onCardClick={setDetailCard}
-          />
-        ) : viewMode === 'compact' ? (
-          <CardCompactView
-            cards={mainboard}
-            onQuantityChange={handleMainQuantityChange}
-            onRemove={handleMainRemove}
-            onCardClick={setDetailCard}
-          />
-        ) : (
-          <div className="space-y-1">
-            {mainboard.map((card) => (
-              <CardRow
-                key={card.scryfall_id ?? card.name}
-                card={card}
-                quantity={card.quantity}
-                onQuantityChange={(qty) => handleMainQuantityChange(card.name, qty)}
-                onRemove={() => handleMainRemove(card.name)}
+          {/* ── Mainboard ── */}
+          <section className="mb-8" data-testid="mainboard-section">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-gray-900">
+              Mainboard
+              <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+                {mainTotal}
+              </span>
+            </h2>
+
+            {mainboard.length === 0 ? (
+              <p className="text-sm text-gray-400" data-testid="mainboard-empty">
+                No mainboard cards yet. Use + Add Card to get started.
+              </p>
+            ) : viewMode === 'grid' ? (
+              <CardGridView
+                cards={mainboard}
+                onQuantityChange={handleMainQuantityChange}
+                onRemove={handleMainRemove}
+                onCardClick={setDetailCard}
               />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ── Sideboard ── */}
-      <section className="mb-8" data-testid="sideboard-section">
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-gray-900">
-          Sideboard
-          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-            {sideTotal}
-          </span>
-        </h2>
-
-        {sideboard.length === 0 ? (
-          <p className="text-sm text-gray-400" data-testid="sideboard-empty">
-            No sideboard cards yet.
-          </p>
-        ) : viewMode === 'grid' ? (
-          <CardGridView
-            cards={sideboard}
-            onQuantityChange={handleSideQuantityChange}
-            onRemove={handleSideRemove}
-            onCardClick={setDetailCard}
-          />
-        ) : viewMode === 'compact' ? (
-          <CardCompactView
-            cards={sideboard}
-            onQuantityChange={handleSideQuantityChange}
-            onRemove={handleSideRemove}
-            onCardClick={setDetailCard}
-          />
-        ) : (
-          <div className="space-y-1">
-            {sideboard.map((card) => (
-              <CardRow
-                key={card.scryfall_id ?? card.name}
-                card={card}
-                quantity={card.quantity}
-                onQuantityChange={(qty) => handleSideQuantityChange(card.name, qty)}
-                onRemove={() => handleSideRemove(card.name)}
+            ) : viewMode === 'compact' ? (
+              <CardCompactView
+                cards={mainboard}
+                onQuantityChange={handleMainQuantityChange}
+                onRemove={handleMainRemove}
+                onCardClick={setDetailCard}
               />
-            ))}
-          </div>
-        )}
-      </section>
+            ) : (
+              <div className="space-y-1">
+                {mainboard.map((card) => (
+                  <CardRow
+                    key={card.scryfall_id ?? card.name}
+                    card={card}
+                    quantity={card.quantity}
+                    onQuantityChange={(qty) => handleMainQuantityChange(card.name, qty)}
+                    onRemove={() => handleMainRemove(card.name)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* ── Sideboard ── */}
+          <section className="mb-8" data-testid="sideboard-section">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-gray-900">
+              Sideboard
+              <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                {sideTotal}
+              </span>
+            </h2>
+
+            {sideboard.length === 0 ? (
+              <p className="text-sm text-gray-400" data-testid="sideboard-empty">
+                No sideboard cards yet.
+              </p>
+            ) : viewMode === 'grid' ? (
+              <CardGridView
+                cards={sideboard}
+                onQuantityChange={handleSideQuantityChange}
+                onRemove={handleSideRemove}
+                onCardClick={setDetailCard}
+              />
+            ) : viewMode === 'compact' ? (
+              <CardCompactView
+                cards={sideboard}
+                onQuantityChange={handleSideQuantityChange}
+                onRemove={handleSideRemove}
+                onCardClick={setDetailCard}
+              />
+            ) : (
+              <div className="space-y-1">
+                {sideboard.map((card) => (
+                  <CardRow
+                    key={card.scryfall_id ?? card.name}
+                    card={card}
+                    quantity={card.quantity}
+                    onQuantityChange={(qty) => handleSideQuantityChange(card.name, qty)}
+                    onRemove={() => handleSideRemove(card.name)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <DeckHistory
+          deckId={id!}
+          games={games}
+          currentState={{ cards: mainboard, sideboard, format, notes: notesRef.current }}
+          activeSnapshotId={activeSnapshotId}
+          onRevert={handleRevert}
+        />
+      )}
 
 
       {/* ── CardSearch panel ── */}

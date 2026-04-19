@@ -8,7 +8,12 @@ import { useCards } from '../hooks/useCards'
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
-vi.mock('../firebase', () => ({ auth: { currentUser: null } }))
+vi.mock('../firebase', () => ({
+  auth: {
+    currentUser: null,
+    onIdTokenChanged: vi.fn(() => () => {}),
+  },
+}))
 vi.mock('../api/client', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }))
@@ -19,6 +24,19 @@ vi.mock('../hooks/useDecks')
 vi.mock('../hooks/useCards')
 vi.mock('../hooks/useGames', () => ({
   useGames: () => ({ games: [], loading: false, error: null, addGame: vi.fn(), refetch: vi.fn() }),
+}))
+
+vi.mock('../components/DeckHistory', () => ({
+  default: ({ onRevert }: { onRevert: (deck: unknown, snapshot: unknown) => void }) => (
+    <div data-testid="deck-history">
+      <button onClick={() => onRevert(
+        { id: 'deck-1', name: 'Reverted', cards: [], sideboard: [], format: 'Modern', notes: '', created_at: '', updated_at: '' },
+        { id: 'snap-1', createdAt: '2026-04-15T10:00:00.000Z', cards: [], sideboard: [], format: 'Modern', notes: '' }
+      )}>
+        Mock Revert
+      </button>
+    </div>
+  ),
 }))
 
 const mockedUseDecks = vi.mocked(useDecks)
@@ -516,6 +534,163 @@ describe('DeckEditor — auto-save', () => {
     })
 
     expect(updateDeck).not.toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
+})
+
+// ── Tab navigation ────────────────────────────────────────────────────────────
+
+describe('DeckEditor — tab navigation', () => {
+  it('renders the Current Deck and Deck History tabs', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('tab-current'))
+    expect(screen.getByTestId('tab-current')).toBeInTheDocument()
+    expect(screen.getByTestId('tab-history')).toBeInTheDocument()
+  })
+
+  it('shows mainboard section when Current Deck tab is active', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('tab-current'))
+    fireEvent.click(screen.getByTestId('tab-current'))
+    expect(screen.getByTestId('mainboard-section')).toBeInTheDocument()
+  })
+
+  it('shows DeckHistory when Deck History tab is clicked', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('tab-history'))
+    fireEvent.click(screen.getByTestId('tab-history'))
+    expect(screen.getByTestId('deck-history')).toBeInTheDocument()
+    expect(screen.queryByTestId('mainboard-section')).not.toBeInTheDocument()
+  })
+})
+
+// ── Snapshot timer ────────────────────────────────────────────────────────────
+
+describe('DeckEditor — snapshot timer', () => {
+  it('posts a snapshot after SNAPSHOT_WINDOW_MS of inactivity following a change', async () => {
+    mockedClient.post.mockResolvedValue({ data: { id: 'snap-new', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' } })
+    renderEditor()
+    // Wait for deck to load with real timers
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+    // Trigger a change to start the snapshot timer
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'modern' } })
+    })
+
+    // Advance past the snapshot window
+    await act(async () => {
+      vi.advanceTimersByTime(180_001)
+    })
+
+    expect(mockedClient.post).toHaveBeenCalledWith(
+      `/api/decks/test-deck-id/snapshots`,
+      expect.objectContaining({ format: 'modern' }),
+    )
+    vi.useRealTimers()
+  })
+})
+
+// ── Revert ────────────────────────────────────────────────────────────────────
+
+describe('DeckEditor — revert', () => {
+  it('switches back to the Current Deck tab after a successful revert', async () => {
+    renderEditor()
+    await waitFor(() => screen.getByTestId('tab-history'))
+    fireEvent.click(screen.getByTestId('tab-history'))
+    expect(screen.getByTestId('deck-history')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /mock revert/i }))
+
+    await waitFor(() => expect(screen.getByTestId('mainboard-section')).toBeInTheDocument())
+    expect(screen.queryByTestId('deck-history')).not.toBeInTheDocument()
+  })
+
+  it('cancels the pending auto-save debounce on revert so pre-revert edits do not overwrite the server', async () => {
+    mockedClient.put.mockResolvedValue({ data: {} })
+    mockedClient.post.mockResolvedValue({ data: {} })
+    renderEditor()
+    // Load with real timers first
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Trigger a format change — queues a 2 s auto-save debounce
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'draft' } })
+    })
+
+    // Revert before the debounce fires
+    fireEvent.click(screen.getByTestId('tab-history'))
+    fireEvent.click(screen.getByRole('button', { name: /mock revert/i }))
+
+    // Advance past the 2-second auto-save window — no PUT should fire
+    await act(async () => { vi.advanceTimersByTime(3000) })
+
+    expect(mockedClient.put).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+})
+
+// ── Timeline pruning ──────────────────────────────────────────────────────────
+
+describe('DeckEditor — timeline pruning', () => {
+  it('calls DELETE /snapshots/after/:id before creating a new snapshot when edits follow a restore', async () => {
+    mockedClient.delete.mockResolvedValue({ data: { deleted: 1 } })
+    mockedClient.post.mockResolvedValue({ data: { id: 'snap-new', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' } })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Simulate a restore (mock DeckHistory fires onRevert with snap-1)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('tab-history'))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /mock revert/i }))
+    })
+
+    // Trigger an edit to start the snapshot timer
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'draft' } })
+    })
+
+    // Advance past the 3-minute snapshot window
+    await act(async () => { vi.advanceTimersByTime(180_001) })
+
+    // Prune call must precede snapshot creation
+    const deleteCalls = mockedClient.delete.mock.invocationCallOrder
+    const postCalls = mockedClient.post.mock.invocationCallOrder
+    expect(mockedClient.delete).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/decks\/.+\/snapshots\/after\/snap-1/),
+    )
+    expect(mockedClient.post).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/decks\/.+\/snapshots$/),
+      expect.any(Object),
+    )
+    expect(Math.min(...deleteCalls)).toBeLessThan(Math.min(...postCalls))
+
+    vi.useRealTimers()
+  })
+
+  it('does not call DELETE when no restore happened before the new snapshot', async () => {
+    mockedClient.post.mockResolvedValue({ data: { id: 'snap-new', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' } })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Edit without restoring first
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'draft' } })
+    })
+
+    await act(async () => { vi.advanceTimersByTime(180_001) })
+
+    expect(mockedClient.delete).not.toHaveBeenCalled()
 
     vi.useRealTimers()
   })

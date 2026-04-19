@@ -2,31 +2,29 @@
 
 ## Overview
 
-A local-first Magic: The Gathering deck management app. Decks are stored as
-JSON files on disk, with a React frontend for editing, notes, and card lookup
-via the Scryfall API. Firebase sync is an optional future layer — the app works
-fully offline without it.
+A Magic: The Gathering deck management app. Decks, game logs, and snapshot history are stored in Firebase Firestore. The React frontend talks to an Express API server, which proxies Scryfall card lookups (cached locally on disk) and owns all Firestore reads/writes. The app supports full deck editing, MTGA import/export, per-session snapshot checkpoints, and a history timeline with per-snapshot W/L records and card diffs.
 
 ---
 
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   React Frontend                     │
-│  DeckList │ DeckEditor │ CardSearch │ ImportModal    │
-└─────────────────────┬───────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                     React Frontend                       │
+│  DeckList │ DeckEditor │ DeckHistory │ CardSearch        │
+└─────────────────────┬───────────────────────────────────┘
                       │ fetch/axios
-┌─────────────────────▼───────────────────────────────┐
-│                 Express API Server                   │
-│   /decks    /cards (proxy)    /import    /export     │
-└──────┬──────────────┬────────────────────────────────┘
-       │              │
-┌──────▼──────┐  ┌────▼──────────────────┐
-│  JSON files │  │  Scryfall API          │
-│  /data/     │  │  api.scryfall.com      │
-│  decks/     │  │  (cached locally)      │
-└─────────────┘  └───────────────────────┘
+┌─────────────────────▼───────────────────────────────────┐
+│                  Express API Server                      │
+│  /decks  /games  /snapshots  /cards  /import  /export   │
+└──────┬──────────────────┬────────────────────────────────┘
+       │                  │
+┌──────▼──────────┐  ┌────▼──────────────────┐
+│  Firebase       │  │  Scryfall API          │
+│  Firestore      │  │  api.scryfall.com      │
+│  (decks/games/  │  │  (cached locally in    │
+│   snapshots)    │  │   /data/cache/)        │
+└─────────────────┘  └───────────────────────┘
 ```
 
 ---
@@ -39,25 +37,25 @@ fully offline without it.
 | Styling | Tailwind CSS | Utility-first, no CSS file sprawl |
 | State | React Context + useReducer | Sufficient for this scope, no Redux overhead |
 | Backend | Express (Node) | Lightweight, handles file I/O and API proxy cleanly |
-| Storage | JSON files on disk | Local-first, human-readable, easy to inspect/debug |
+| Storage | Firebase Firestore | Cloud-hosted document DB; decks, games, and snapshots stored as subcollections |
 | Card data cache | JSON files in `/data/cache/` | Avoids hammering Scryfall, respects their rate limits |
 | External API | Scryfall REST API | Free, comprehensive, well-documented |
-| Future: sync | Firebase Firestore | Optional layer, architecture supports it without refactor |
 
 ---
 
 ## Data Model
 
-### Deck file: `/data/decks/{deck-id}.json`
+### Deck document: Firestore `/mtg-deck-handler/{deckId}`
 
 ```json
 {
-  "id": "uuid-v4",
+  "id": "firestore-doc-id",
   "name": "Mono Red Burn",
   "format": "Standard",
   "created_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-20T14:22:00Z",
   "notes": "Main strategy: go fast, burn face. Sideboard for control matchups.",
+  "activeSnapshotId": "snapshot-doc-id",
   "cards": [
     {
       "quantity": 4,
@@ -75,6 +73,20 @@ fully offline without it.
     }
   ],
   "tags": ["aggro", "burn", "red"]
+}
+```
+
+`activeSnapshotId` is set server-side on every `createSnapshot` and `revertToSnapshot` call. The client reads it on deck load and uses it to display the "Current" badge on the correct snapshot entry.
+
+### Snapshot document: Firestore `/mtg-deck-handler/{deckId}/snapshots/{snapshotId}`
+
+```json
+{
+  "createdAt": "2024-01-20T14:22:00Z",
+  "cards": [...],
+  "sideboard": [...],
+  "format": "Standard",
+  "notes": "..."
 }
 ```
 
@@ -119,6 +131,14 @@ Sections separated by blank line (mainboard then sideboard).
 | POST | `/api/decks/:id/export` | Generate MTGA-format text, return as string |
 | POST | `/api/import` | Parse MTGA-format text, create deck JSON |
 
+### Snapshots
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/decks/:id/snapshots` | List all snapshots, newest first |
+| POST | `/api/decks/:id/snapshots` | Create a snapshot of current deck state |
+| POST | `/api/decks/:id/snapshots/:snapshotId/revert` | Revert deck to snapshot; updates `activeSnapshotId` on deck |
+| DELETE | `/api/decks/:id/snapshots/after/:snapshotId` | Prune snapshots created after a given snapshot (called after revert to remove invalidated future checkpoints) |
+
 ---
 
 ## Frontend Pages / Views
@@ -130,11 +150,20 @@ Sections separated by blank line (mainboard then sideboard).
 
 ### Deck Editor (`/deck/:id`)
 - Deck name and format (editable inline)
+- Tab navigation: **Current Deck** (mainboard, sideboard, game log) | **Deck History** (snapshot timeline)
 - Mainboard and sideboard sections with card rows (quantity, name, mana cost, type)
 - Notes textarea (auto-saves on blur)
 - Add card via search (opens card search panel)
 - Remove card / adjust quantity
 - Export button (copies MTGA text to clipboard)
+- Snapshot timer: fires a `POST /snapshots` after 3 minutes of inactivity; also sends a best-effort `keepalive` snapshot on `beforeunload`
+
+### Deck History tab
+- Pending "Working changes" entry showing live edits vs latest snapshot (client-side diff, no network call)
+- Timeline of committed snapshots, newest → oldest, with upward-arrow connectors
+- Each entry: timestamp, card count, W/L record at that point, card diff (expand/collapse chips), Restore button
+- "Current" badge on whichever snapshot is `activeSnapshotId`
+- Reverting a snapshot deletes newer snapshots (timeline pruning) then sets the deck back to that state
 
 ### Card Search Panel (slide-in)
 - Text search → calls `/api/cards/search`
@@ -214,19 +243,22 @@ mtg-deck-manager/
 
 ---
 
-## Firebase (Future / Optional)
+## Firebase / Firestore
 
-When added, Firebase sits alongside the local JSON layer — it does not replace it.
-The sync strategy: local file is always source of truth, Firebase is a mirror.
+Firebase Firestore is the live storage backend for deck documents, game logs, and snapshot history. Decks are no longer stored as local JSON files — Firestore is the source of truth.
 
-Changes needed when adding Firebase:
-- `server/services/firebaseService.js` — sync on deck write
-- `server/index.js` — initialize Firebase Admin SDK
-- No frontend changes required (all sync is server-side)
-- Environment variable: `FIREBASE_ENABLED=true`
+`server/services/db.js` initialises the Firebase Admin SDK using the service account key at `server/serviceAccountKey.json` (gitignored). All service modules (`deckService`, `gameService`, `snapshotService`) import the shared `db` singleton.
 
-This means the Firebase addition is a single PR touching only the server,
-with zero risk to the existing local-first behavior.
+### Snapshot subcollection
+
+Each deck document has a `snapshots` subcollection at:
+```
+/mtg-deck-handler/{deckId}/snapshots/{snapshotId}
+```
+
+A snapshot document stores `{ createdAt, cards, sideboard, format, notes }` — a full point-in-time copy of the deck's card state.
+
+`activeSnapshotId` is a field on the **deck document** itself, updated server-side on every snapshot creation or revert. The client reads this field on deck load and uses it to mark the correct timeline entry as "Current" — surviving tab switches and page reloads.
 
 ---
 
@@ -237,5 +269,4 @@ with zero risk to the existing local-first behavior.
 PORT=3001
 DATA_DIR=../data
 SCRYFALL_RATE_LIMIT_MS=100   # min ms between Scryfall requests
-FIREBASE_ENABLED=false        # set true when adding Firebase
 ```
