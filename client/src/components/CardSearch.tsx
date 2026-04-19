@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import CloseButton from './CloseButton'
 import Spinner from './Spinner'
 import CardResultItem from './CardResultItem'
@@ -66,7 +66,7 @@ function CardSearch({ sectionNames, onAddToSection, isOpen = true, onClose }: Ca
 
   // ── Run a search ─────────────────────────────────────────────────────────
 
-  const runSearch = useCallback(async (value: string) => {
+  async function runSearch(value: string) {
     if (!value.trim()) {
       setResults([])
       setHasSearched(false)
@@ -75,33 +75,27 @@ function CardSearch({ sectionNames, onAddToSection, isOpen = true, onClose }: Ca
     const data = await searchCards(value.trim())
     setResults(data)
     setHasSearched(true)
-  }, [searchCards])
+  }
 
   // ── Debounced search on input change ──────────────────────────────────────
-  const handleQueryChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value
-      setQuery(value)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => runSearch(value), 300)
-    },
-    [runSearch],
-  )
+  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value
+    setQuery(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => runSearch(value), 300)
+  }
 
   // ── Immediate search on form submit ───────────────────────────────────────
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault()
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      runSearch(query)
-    },
-    [query, runSearch],
-  )
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    runSearch(query)
+  }
 
   // ── Retry after error ─────────────────────────────────────────────────────
-  const handleRetry = useCallback(() => {
+  function handleRetry() {
     runSearch(query)
-  }, [query, runSearch])
+  }
 
   return (
     <>

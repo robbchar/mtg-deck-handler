@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import type { ScryfallCard } from '../types'
 import CardImagePlaceholder from './CardImagePlaceholder'
 import Spinner from './Spinner'
@@ -111,26 +111,23 @@ export default function CardDetailModal({
   const oracleText = card ? getOracleText(card) : null
   const displayName = card?.name ?? name ?? '…'
 
-  const handleQtyDecrement = useCallback(() => {
+  function handleQtyDecrement() {
     if (!deckControls) return
     if (deckControls.quantity <= 1) deckControls.onRemove()
     else deckControls.onQuantityChange(deckControls.quantity - 1)
-  }, [deckControls])
+  }
 
-  const handleQtyIncrement = useCallback(() => {
+  function handleQtyIncrement() {
     if (!deckControls) return
     deckControls.onQuantityChange(deckControls.quantity + 1)
-  }, [deckControls])
+  }
 
-  const handleQtyInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!deckControls) return
-      const val = parseInt(e.target.value, 10)
-      if (Number.isNaN(val) || val < 1) return
-      deckControls.onQuantityChange(val)
-    },
-    [deckControls],
-  )
+  function handleQtyInput(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!deckControls) return
+    const val = parseInt(e.target.value, 10)
+    if (Number.isNaN(val) || val < 1) return
+    deckControls.onQuantityChange(val)
+  }
 
   return (
     /* Backdrop */

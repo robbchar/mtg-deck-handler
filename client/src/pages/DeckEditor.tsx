@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import client from '../api/client'
 import { useDecks } from '../hooks/useDecks'
@@ -138,18 +138,15 @@ function DeckEditor() {
     })
   }, [])
 
-  const scheduleAutoSave = useCallback(
-    (patch: DeckPatch) => {
-      pendingRef.current = { ...pendingRef.current, ...patch }
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => {
-        const snapshot = { ...pendingRef.current }
-        pendingRef.current = {}
-        updateDeck(id!, snapshot)
-      }, 2000)
-    },
-    [id, updateDeck],
-  )
+  function scheduleAutoSave(patch: DeckPatch) {
+    pendingRef.current = { ...pendingRef.current, ...patch }
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const snapshot = { ...pendingRef.current }
+      pendingRef.current = {}
+      updateDeck(id!, snapshot)
+    }, 2000)
+  }
 
   // Keep snapshotDataRef in sync with the latest state so the timer always
   // fires with up-to-date data even if state changed after the timer was set.
@@ -163,7 +160,7 @@ function DeckEditor() {
   }, [mainboard, sideboard, format])
 
   /** Resets the 3-minute inactivity timer that commits a snapshot. */
-  const scheduleSnapshot = useCallback(() => {
+  function scheduleSnapshot() {
     snapshotPendingRef.current = true
     if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
     snapshotTimerRef.current = setTimeout(async () => {
@@ -184,7 +181,7 @@ function DeckEditor() {
         console.error('Snapshot failed silently:', err)
       }
     }, SNAPSHOT_WINDOW_MS)
-  }, [id])
+  }
 
   // On unmount (navigation), flush any pending debounced save immediately so
   // no changes are silently discarded when the user navigates away.

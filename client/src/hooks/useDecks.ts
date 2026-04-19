@@ -1,4 +1,4 @@
-import { useContext, useEffect, useCallback } from 'react'
+import { useContext, useEffect } from 'react'
 import client from '../api/client'
 import { DeckContext } from '../context/DeckContext'
 import type { Deck, DeckMetadata, CardEntry } from '../types'
@@ -45,7 +45,7 @@ export function useDecks() {
 
   // ── Fetch deck list ────────────────────────────────────────────────────────
 
-  const fetchDecks = useCallback(async () => {
+  async function fetchDecks() {
     dispatch({ type: 'FETCH_START' })
     try {
       const { data } = await client.get<DeckMetadata[]>('/api/decks')
@@ -56,7 +56,7 @@ export function useDecks() {
         payload: getErrorMessage(err, 'Failed to load decks'),
       })
     }
-  }, [dispatch])
+  }
 
   // Fetch on mount.
   useEffect(() => {
@@ -82,7 +82,7 @@ export function useDecks() {
   }, [dispatch])
 
   /** Re-fetch the deck list (e.g. after a network error). */
-  const refetch = useCallback(() => fetchDecks(), [fetchDecks])
+  function refetch() { return fetchDecks() }
 
   // ── createDeck ────────────────────────────────────────────────────────────
 
@@ -96,39 +96,36 @@ export function useDecks() {
    *
    * On failure: `ROLLBACK_ADD` removes the placeholder by tempId.
    */
-  const createDeck = useCallback(
-    async (data: CreateDeckInput): Promise<DeckMetadata | null> => {
-      const tempId = `temp-${Date.now()}`
-      const optimistic: DeckMetadata = {
-        id: tempId,
-        name: data.name ?? 'New Deck',
-        format: data.format ?? '',
-        notes: data.notes ?? '',
-        card_count: 0,
-        updated_at: new Date().toISOString(),
-      }
+  async function createDeck(data: CreateDeckInput): Promise<DeckMetadata | null> {
+    const tempId = `temp-${Date.now()}`
+    const optimistic: DeckMetadata = {
+      id: tempId,
+      name: data.name ?? 'New Deck',
+      format: data.format ?? '',
+      notes: data.notes ?? '',
+      card_count: 0,
+      updated_at: new Date().toISOString(),
+    }
 
-      dispatch({ type: 'ADD_DECK', payload: optimistic })
+    dispatch({ type: 'ADD_DECK', payload: optimistic })
 
-      try {
-        const { data: created } = await client.post<DeckMetadata>('/api/decks', data)
-        // Reducer locates tempId in current state and replaces — no stale closure.
-        dispatch({
-          type: 'REPLACE_TEMP_DECK',
-          payload: { tempId, deck: created },
-        })
-        return created
-      } catch (err) {
-        dispatch({ type: 'ROLLBACK_ADD', payload: tempId })
-        dispatch({
-          type: 'SET_ERROR',
-          payload: getErrorMessage(err, 'Failed to create deck'),
-        })
-        return null
-      }
-    },
-    [dispatch] // `decks` is NOT needed — reducer operates on current state
-  )
+    try {
+      const { data: created } = await client.post<DeckMetadata>('/api/decks', data)
+      // Reducer locates tempId in current state and replaces — no stale closure.
+      dispatch({
+        type: 'REPLACE_TEMP_DECK',
+        payload: { tempId, deck: created },
+      })
+      return created
+    } catch (err) {
+      dispatch({ type: 'ROLLBACK_ADD', payload: tempId })
+      dispatch({
+        type: 'SET_ERROR',
+        payload: getErrorMessage(err, 'Failed to create deck'),
+      })
+      return null
+    }
+  }
 
   // ── updateDeck ────────────────────────────────────────────────────────────
 
@@ -137,32 +134,29 @@ export function useDecks() {
    * optimistically via `UPDATE_DECK`; rolls back with the pre-change snapshot
    * on server failure.
    */
-  const updateDeck = useCallback(
-    async (id: string, data: DeckPatch): Promise<DeckMetadata | null> => {
-      const previous = decks.find((d) => d.id === id)
-      if (!previous) return null
+  async function updateDeck(id: string, data: DeckPatch): Promise<DeckMetadata | null> {
+    const previous = decks.find((d) => d.id === id)
+    if (!previous) return null
 
-      // DeckPatch may contain cards/sideboard (not in DeckMetadata) for the
-      // server call; the cast is safe because the list view never reads those.
-      const optimistic = { ...previous, ...data } as DeckMetadata
-      dispatch({ type: 'UPDATE_DECK', payload: optimistic })
+    // DeckPatch may contain cards/sideboard (not in DeckMetadata) for the
+    // server call; the cast is safe because the list view never reads those.
+    const optimistic = { ...previous, ...data } as DeckMetadata
+    dispatch({ type: 'UPDATE_DECK', payload: optimistic })
 
-      try {
-        const { data: updated } = await client.put<DeckMetadata>(`/api/decks/${id}`, data)
-        dispatch({ type: 'UPDATE_DECK', payload: updated })
-        return updated
-      } catch (err) {
-        // `previous` is a snapshot captured before the optimistic dispatch.
-        dispatch({ type: 'UPDATE_DECK', payload: previous })
-        dispatch({
-          type: 'SET_ERROR',
-          payload: getErrorMessage(err, 'Failed to update deck'),
-        })
-        return null
-      }
-    },
-    [decks, dispatch]
-  )
+    try {
+      const { data: updated } = await client.put<DeckMetadata>(`/api/decks/${id}`, data)
+      dispatch({ type: 'UPDATE_DECK', payload: updated })
+      return updated
+    } catch (err) {
+      // `previous` is a snapshot captured before the optimistic dispatch.
+      dispatch({ type: 'UPDATE_DECK', payload: previous })
+      dispatch({
+        type: 'SET_ERROR',
+        payload: getErrorMessage(err, 'Failed to update deck'),
+      })
+      return null
+    }
+  }
 
   // ── deleteDeck ────────────────────────────────────────────────────────────
 
@@ -171,27 +165,24 @@ export function useDecks() {
    * `REMOVE_DECK`. On server failure, `ROLLBACK_REMOVE` re-appends the
    * pre-captured snapshot.
    */
-  const deleteDeck = useCallback(
-    async (id: string): Promise<boolean> => {
-      const previous = decks.find((d) => d.id === id)
-      if (!previous) return false
+  async function deleteDeck(id: string): Promise<boolean> {
+    const previous = decks.find((d) => d.id === id)
+    if (!previous) return false
 
-      dispatch({ type: 'REMOVE_DECK', payload: id })
+    dispatch({ type: 'REMOVE_DECK', payload: id })
 
-      try {
-        await client.delete(`/api/decks/${id}`)
-        return true
-      } catch (err) {
-        dispatch({ type: 'ROLLBACK_REMOVE', payload: previous })
-        dispatch({
-          type: 'SET_ERROR',
-          payload: getErrorMessage(err, 'Failed to delete deck'),
-        })
-        return false
-      }
-    },
-    [decks, dispatch]
-  )
+    try {
+      await client.delete(`/api/decks/${id}`)
+      return true
+    } catch (err) {
+      dispatch({ type: 'ROLLBACK_REMOVE', payload: previous })
+      dispatch({
+        type: 'SET_ERROR',
+        payload: getErrorMessage(err, 'Failed to delete deck'),
+      })
+      return false
+    }
+  }
 
   // ── getDeck ───────────────────────────────────────────────────────────────
 
@@ -201,21 +192,18 @@ export function useDecks() {
    * Always hits the API — the list cache holds DeckMetadata which has no
    * cards/sideboard arrays, so it cannot be used as a Deck substitute.
    */
-  const getDeck = useCallback(
-    async (id: string): Promise<Deck | null> => {
-      try {
-        const { data } = await client.get<Deck>(`/api/decks/${id}`)
-        return data
-      } catch (err) {
-        dispatch({
-          type: 'SET_ERROR',
-          payload: getErrorMessage(err, 'Failed to fetch deck'),
-        })
-        return null
-      }
-    },
-    [dispatch]
-  )
+  async function getDeck(id: string): Promise<Deck | null> {
+    try {
+      const { data } = await client.get<Deck>(`/api/decks/${id}`)
+      return data
+    } catch (err) {
+      dispatch({
+        type: 'SET_ERROR',
+        payload: getErrorMessage(err, 'Failed to fetch deck'),
+      })
+      return null
+    }
+  }
 
   return { decks, loading, error, createDeck, updateDeck, deleteDeck, getDeck, refetch }
 }
