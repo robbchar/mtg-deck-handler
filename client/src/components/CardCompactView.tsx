@@ -45,9 +45,7 @@ function CompactCardItem({ card, onQuantityChange, onRemove, onCardClick }: Comp
     return () => {
       cancelled = true
     }
-    // Run once on mount — card identity doesn't change within a mounted instance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [card.scryfall_id, card.name, imgSrc])
 
   return (
     <li className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">

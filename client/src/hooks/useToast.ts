@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useRef } from 'react'
 
 export type ToastType = 'error' | 'success' | 'info'
 
@@ -22,21 +22,18 @@ export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
-  const removeToast = useCallback((id: string) => {
+  function removeToast(id: string) {
     clearTimeout(timers.current.get(id))
     timers.current.delete(id)
     setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
+  }
 
-  const addToast = useCallback(
-    (message: string, type: ToastType = 'error') => {
-      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      setToasts((prev) => [...prev, { id, message, type }])
-      const timer = setTimeout(() => removeToast(id), AUTO_DISMISS_MS)
-      timers.current.set(id, timer)
-    },
-    [removeToast],
-  )
+  function addToast(message: string, type: ToastType = 'error') {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setToasts((prev) => [...prev, { id, message, type }])
+    const timer = setTimeout(() => removeToast(id), AUTO_DISMISS_MS)
+    timers.current.set(id, timer)
+  }
 
   return { toasts, addToast, removeToast }
 }

@@ -45,9 +45,7 @@ function GridCardItem({ card, onQuantityChange, onRemove, onCardClick }: GridCar
     return () => {
       cancelled = true
     }
-    // Run once on mount — card identity doesn't change within a mounted instance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [card.scryfall_id, card.name, imgSrc])
 
   return (
     <li key={card.scryfall_id ?? card.name} className="flex flex-col">

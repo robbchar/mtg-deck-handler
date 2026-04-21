@@ -26,7 +26,7 @@ function DeckList() {
   // Surface API errors as toasts in addition to the inline banner.
   useEffect(() => {
     if (error) addToast(error)
-  }, [error]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [error, addToast])
 
   /**
    * Creates a new deck with a default name and immediately opens the editor.

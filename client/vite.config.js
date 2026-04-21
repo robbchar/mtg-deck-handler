@@ -16,9 +16,19 @@ import react from '@vitejs/plugin-react'
  *
  * Test: jsdom environment with @testing-library/jest-dom matchers auto-imported
  * via a setup file.
+ *
+ * React Compiler: babel-plugin-react-compiler is wired in via the @vitejs/plugin-react
+ * babel options. This enables automatic memoisation for React 19 — useCallback/useMemo
+ * are no longer required for performance in components compiled by it.
  */
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
+  ],
   resolve: {
     dedupe: ['react', 'react-dom'],
   },

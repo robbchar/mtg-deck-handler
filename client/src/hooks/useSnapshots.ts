@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import client from '../api/client'
 import type { DeckSnapshot, Deck } from '../types'
 
@@ -40,7 +40,7 @@ export function useSnapshots(deckId: string | undefined) {
     }
   }, [deckId])
 
-  const refetchSnapshots = useCallback(async () => {
+  async function refetchSnapshots() {
     if (!deckId) return
     try {
       const { data } = await client.get<DeckSnapshot[]>(`/api/decks/${deckId}/snapshots`)
@@ -48,25 +48,22 @@ export function useSnapshots(deckId: string | undefined) {
     } catch {
       // silently ignore background refetch errors
     }
-  }, [deckId])
+  }
 
-  const revertSnapshot = useCallback(
-    async (snapshotId: string): Promise<Deck | null> => {
-      if (!deckId) return null
-      try {
-        await client.post(`/api/decks/${deckId}/snapshots/${snapshotId}/revert`)
-        // Re-fetch the full deck so the caller gets complete, server-confirmed data
-        // (the revert POST response may lack Scryfall fields stored on the deck doc)
-        const { data: freshDeck } = await client.get<Deck>(`/api/decks/${deckId}`)
-        await refetchSnapshots()
-        return freshDeck
-      } catch (err) {
-        setError(getErrorMessage(err, 'Failed to revert deck'))
-        return null
-      }
-    },
-    [deckId, refetchSnapshots],
-  )
+  async function revertSnapshot(snapshotId: string): Promise<Deck | null> {
+    if (!deckId) return null
+    try {
+      await client.post(`/api/decks/${deckId}/snapshots/${snapshotId}/revert`)
+      // Re-fetch the full deck so the caller gets complete, server-confirmed data
+      // (the revert POST response may lack Scryfall fields stored on the deck doc)
+      const { data: freshDeck } = await client.get<Deck>(`/api/decks/${deckId}`)
+      await refetchSnapshots()
+      return freshDeck
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to revert deck'))
+      return null
+    }
+  }
 
   return { snapshots, loading, error, revertSnapshot }
 }

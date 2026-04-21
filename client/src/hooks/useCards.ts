@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import client from '../api/client'
 import type { ScryfallCard } from '../types'
 
@@ -21,7 +21,7 @@ export function useCards() {
    * Searches Scryfall for cards matching the given query.
    * Returns an empty array for blank queries, no-result searches, or errors.
    */
-  const searchCards = useCallback(async (query: string | null | undefined): Promise<ScryfallCard[]> => {
+  async function searchCards(query: string | null | undefined): Promise<ScryfallCard[]> {
     if (!query || typeof query !== 'string' || !query.trim()) return []
 
     setSearching(true)
@@ -37,13 +37,13 @@ export function useCards() {
     } finally {
       setSearching(false)
     }
-  }, [])
+  }
 
   /**
    * Fetches a single card by its Scryfall UUID.
    * Returns null for missing/unknown cards or on any API error.
    */
-  const getCard = useCallback(async (scryfallId: string | null | undefined): Promise<ScryfallCard | null> => {
+  async function getCard(scryfallId: string | null | undefined): Promise<ScryfallCard | null> {
     if (!scryfallId) return null
     setError(null)
     try {
@@ -53,7 +53,7 @@ export function useCards() {
       setError(getErrorMessage(err, 'Failed to fetch card'))
       return null
     }
-  }, [])
+  }
 
   return { searchCards, getCard, searching, error }
 }
