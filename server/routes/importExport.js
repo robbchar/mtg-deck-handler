@@ -9,10 +9,10 @@
  */
 
 const { Router } = require('express');
-const { getDeck, createDeck } = require('../services/deckService');
+const { getDeck, createDeck, updateDeck } = require('../services/deckService');
 const { exportDeck, parseMtgaText } = require('../services/mtgaService');
 const { getCard, searchCards, getCardBySetCollector } = require('../services/cardService');
-const { validateImport } = require('../middleware/validate');
+const { validateImport, validateUpdateImport } = require('../middleware/validate');
 
 const router = Router();
 
@@ -142,6 +142,55 @@ router.post('/import', validateImport, async (req, res) => {
     res.status(201).json(deck);
   } catch (err) {
     console.error('POST /api/import error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// ── POST /api/decks/:id/import ────────────────────────────────────────────────
+
+/**
+ * Updates an existing deck's card list from MTGA-formatted text.
+ *
+ * Replaces `cards`, `sideboard`, and `unknown` on the deck.
+ * Name, format, and notes are left unchanged.
+ *
+ * Flow:
+ *   1. Validate required field (text).
+ *   2. Call parseMtgaText(text) → { mainboard, sideboard }.
+ *   3. Resolve all cards via resolveCardEntry (Scryfall, rate-limited).
+ *   4. Call updateDeck(id, { cards, sideboard, unknown }).
+ *   5. Return the updated deck as 200.
+ *
+ * @route   POST /api/decks/:id/import
+ * @returns {200} Full deck JSON
+ * @returns {400} { error: string }
+ * @returns {404} { error: string }
+ * @returns {500} { error: string }
+ */
+router.post('/decks/:id/import', validateUpdateImport, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const { id } = req.params;
+
+    const { mainboard, sideboard } = parseMtgaText(text);
+
+    const [cards, sideboardCards] = await Promise.all([
+      Promise.all(mainboard.map((c) => resolveCardEntry(c, 'mainboard'))),
+      Promise.all(sideboard.map((c) => resolveCardEntry(c, 'sideboard'))),
+    ]);
+
+    const unknown = [...cards, ...sideboardCards]
+      .filter((c) => !c.scryfall_id)
+      .map((c) => c.name);
+
+    const deck = await updateDeck(id, { cards, sideboard: sideboardCards, unknown });
+
+    res.json(deck);
+  } catch (err) {
+    if (err.message && err.message.startsWith('Deck not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    console.error('POST /api/decks/:id/import error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });

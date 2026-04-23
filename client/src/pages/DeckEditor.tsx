@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import client from '../api/client'
 import { useDecks } from '../hooks/useDecks'
@@ -9,6 +9,7 @@ import CardGridView from '../components/CardGridView'
 import CardCompactView from '../components/CardCompactView'
 import CardDetailModal from '../components/CardDetailModal'
 import CardSearch from '../components/CardSearch'
+import ImportModal from '../components/ImportModal'
 import GameLogger from '../components/GameLogger'
 import GameLogList from '../components/GameLogList'
 import Spinner from '../components/Spinner'
@@ -85,6 +86,7 @@ function DeckEditor() {
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [detailCard, setDetailCard] = useState<CardEntry | null>(null)
@@ -218,33 +220,32 @@ function DeckEditor() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [id])
 
-  // ── Load deck on mount ────────────────────────────────────────────────────
+  // ── Load deck ─────────────────────────────────────────────────────────────
+  const reloadDeck = useCallback(async (isCancelled?: () => boolean) => {
+    setLoadState('loading')
+    const deck = await getDeck(id!)
+    if (isCancelled?.()) return
+    if (!deck) {
+      setLoadState('error')
+      return
+    }
+    setNameValue(deck.name ?? '')
+    savedNameRef.current = deck.name ?? ''
+    setFormat(deck.format ?? '')
+    setMainboard(deck.cards ?? [])
+    setSideboard(deck.sideboard ?? [])
+    notesRef.current = deck.notes ?? ''
+    setActiveSnapshotId(deck.activeSnapshotId ?? null)
+    setLoadState('ready')
+  }, [id, getDeck])
+
   useEffect(() => {
     let cancelled = false
-
-    async function load() {
-      setLoadState('loading')
-      const deck = await getDeck(id!)
-      if (cancelled) return
-      if (!deck) {
-        setLoadState('error')
-        return
-      }
-      setNameValue(deck.name ?? '')
-      savedNameRef.current = deck.name ?? ''
-      setFormat(deck.format ?? '')
-      setMainboard(deck.cards ?? [])
-      setSideboard(deck.sideboard ?? [])
-      notesRef.current = deck.notes ?? ''
-      setActiveSnapshotId(deck.activeSnapshotId ?? null)
-      setLoadState('ready')
-    }
-
-    load()
+    reloadDeck(() => cancelled)
     return () => {
       cancelled = true
     }
-  }, [id, getDeck])
+  }, [reloadDeck])
 
   // ── Name editing handlers ─────────────────────────────────────────────────
 
@@ -573,6 +574,15 @@ function DeckEditor() {
               : 'Export'}
           </button>
 
+          <button
+            type="button"
+            onClick={() => setIsUpdateModalOpen(true)}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            data-testid="update-from-mtga-btn"
+          >
+            Update from MTGA
+          </button>
+
           <UserAvatar />
         </div>
       </header>
@@ -710,6 +720,15 @@ function DeckEditor() {
         onClose={() => setIsSearchOpen(false)}
         sectionNames={['mainboard', 'sideboard']}
         onAddToSection={handleAddCard}
+      />
+
+      {/* ── Update deck modal ── */}
+      <ImportModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        mode="update"
+        deckId={id}
+        onSuccess={reloadDeck}
       />
 
       {/* ── Card detail modal ── */}
