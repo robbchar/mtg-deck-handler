@@ -221,9 +221,10 @@ function DeckEditor() {
   }, [id])
 
   // ── Load deck ─────────────────────────────────────────────────────────────
-  const reloadDeck = useCallback(async () => {
+  const reloadDeck = useCallback(async (isCancelled?: () => boolean) => {
     setLoadState('loading')
     const deck = await getDeck(id!)
+    if (isCancelled?.()) return
     if (!deck) {
       setLoadState('error')
       return
@@ -240,27 +241,11 @@ function DeckEditor() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      setLoadState('loading')
-      const deck = await getDeck(id!)
-      if (cancelled) return
-      if (!deck) {
-        setLoadState('error')
-        return
-      }
-      setNameValue(deck.name ?? '')
-      savedNameRef.current = deck.name ?? ''
-      setFormat(deck.format ?? '')
-      setMainboard(deck.cards ?? [])
-      setSideboard(deck.sideboard ?? [])
-      notesRef.current = deck.notes ?? ''
-      setActiveSnapshotId(deck.activeSnapshotId ?? null)
-      setLoadState('ready')
-    })()
+    reloadDeck(() => cancelled)
     return () => {
       cancelled = true
     }
-  }, [id, getDeck])
+  }, [reloadDeck])
 
   // ── Name editing handlers ─────────────────────────────────────────────────
 
