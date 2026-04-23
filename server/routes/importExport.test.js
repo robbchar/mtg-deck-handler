@@ -444,3 +444,140 @@ describe('POST /api/import — Scryfall resolution (mocked cardService)', () => 
     expect(callArg.cards[0].scryfall_id).toBe('scryfall-abc');
   });
 });
+
+// ── POST /api/decks/:id/import ─────────────────────────────────────────────────
+
+describe('POST /api/decks/:id/import', () => {
+  const DECK_ID = 'deck-uuid-001';
+  const PARSED = {
+    mainboard: [{ quantity: 4, name: 'Lightning Bolt' }],
+    sideboard: [{ quantity: 2, name: 'Smash to Smithereens' }],
+  };
+
+  it('returns 200 with the updated deck on success', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    const res = await request(app)
+      .post(`/api/decks/${DECK_ID}/import`)
+      .send({ text: MTGA_TEXT });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(MOCK_DECK);
+  });
+
+  it('calls parseMtgaText with the raw text from the request body', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+
+    expect(mtgaService.parseMtgaText).toHaveBeenCalledWith(MTGA_TEXT);
+  });
+
+  it('calls updateDeck with the deck id and resolved cards', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+
+    expect(deckService.updateDeck).toHaveBeenCalledWith(
+      DECK_ID,
+      expect.objectContaining({
+        cards: expect.any(Array),
+        sideboard: expect.any(Array),
+        unknown: expect.any(Array),
+      }),
+    );
+  });
+
+  it('does not pass name or format to updateDeck', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+
+    const callArg = deckService.updateDeck.mock.calls[0][1];
+    expect(callArg).not.toHaveProperty('name');
+    expect(callArg).not.toHaveProperty('format');
+  });
+
+  it('populates unknown[] with unresolved card names', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+    // cardService mocks return no results by default (see beforeEach)
+
+    await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+
+    const callArg = deckService.updateDeck.mock.calls[0][1];
+    expect(callArg.unknown).toEqual(
+      expect.arrayContaining(['Lightning Bolt', 'Smash to Smithereens']),
+    );
+  });
+
+  it('returns 400 when text is missing', async () => {
+    const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({});
+    expect(res.statusCode).toBe(400);
+    expect(deckService.updateDeck).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when text is an empty string', async () => {
+    const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: '' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 when text is only whitespace', async () => {
+    const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: '   ' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 when the deck does not exist', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockImplementation(() => {
+      throw new Error('Deck not found: deck-uuid-001');
+    });
+
+    const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 500 when updateDeck throws an unexpected error', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockImplementation(() => {
+      throw new Error('Firestore write failure');
+    });
+
+    const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+    expect(res.statusCode).toBe(500);
+  });
+
+  it('Scryfall resolution failures are non-fatal (still returns 200)', async () => {
+    cardService.searchCards.mockRejectedValue(new Error('Scryfall unreachable'));
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('resolved cards are not placed in unknown[]', async () => {
+    const SCRYFALL_CARD = {
+      id: 'scryfall-abc',
+      name: 'Lightning Bolt',
+      mana_cost: '{R}',
+      type_line: 'Instant',
+      image_uris: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' },
+    };
+    cardService.searchCards.mockResolvedValue([SCRYFALL_CARD]);
+    mtgaService.parseMtgaText.mockReturnValue({
+      mainboard: [{ quantity: 4, name: 'Lightning Bolt' }],
+      sideboard: [],
+    });
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: '4 Lightning Bolt' });
+
+    const callArg = deckService.updateDeck.mock.calls[0][1];
+    expect(callArg.unknown).not.toContain('Lightning Bolt');
+  });
+});
