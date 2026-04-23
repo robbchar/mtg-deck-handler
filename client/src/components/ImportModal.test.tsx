@@ -61,6 +61,18 @@ function renderModal({ isOpen = true, onClose = vi.fn() } = {}) {
   )
 }
 
+function renderUpdateModal(overrides: Partial<{ deckId: string; onClose: () => void; onSuccess: () => void }> = {}) {
+  const onClose = overrides.onClose ?? vi.fn()
+  const onSuccess = overrides.onSuccess ?? vi.fn()
+  const deckId = overrides.deckId ?? 'deck-update-001'
+  render(
+    <MemoryRouter>
+      <ImportModal isOpen={true} onClose={onClose} mode="update" deckId={deckId} onSuccess={onSuccess} />
+    </MemoryRouter>,
+  )
+  return { onClose, onSuccess }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockNavigate.mockReset()
@@ -556,5 +568,118 @@ describe('ImportModal — state reset on close', () => {
     )
 
     expect(screen.queryByTestId('import-validation-error')).not.toBeInTheDocument()
+  })
+})
+
+// ── Update mode ───────────────────────────────────────────────────────────────
+
+describe('ImportModal — update mode: hidden fields', () => {
+  it('does not render the deck name input', () => {
+    renderUpdateModal()
+    expect(screen.queryByTestId('import-deck-name')).not.toBeInTheDocument()
+  })
+
+  it('does not render the format select', () => {
+    renderUpdateModal()
+    expect(screen.queryByTestId('import-format')).not.toBeInTheDocument()
+  })
+
+  it('shows "Update Deck" as the modal title', () => {
+    renderUpdateModal()
+    expect(screen.getByRole('heading', { name: 'Update Deck' })).toBeInTheDocument()
+  })
+
+  it('shows "Update Deck" on the submit button', () => {
+    renderUpdateModal()
+    expect(screen.getByTestId('import-submit-button')).toHaveTextContent('Update Deck')
+  })
+})
+
+describe('ImportModal — update mode: submit behaviour', () => {
+  it('calls POST /api/decks/:deckId/import with the pasted text', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: {} })
+    renderUpdateModal({ deckId: 'deck-update-001' })
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => expect(client.post).toHaveBeenCalledTimes(1))
+    expect(client.post).toHaveBeenCalledWith('/api/decks/deck-update-001/import', { text: VALID_TEXT })
+  })
+
+  it('calls onSuccess after a successful update', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: {} })
+    const { onSuccess } = renderUpdateModal()
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
+  })
+
+  it('calls onClose after a successful update', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: {} })
+    const { onClose } = renderUpdateModal()
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not navigate after a successful update', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: {} })
+    renderUpdateModal()
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => expect(client.post).toHaveBeenCalledTimes(1))
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('shows "Updating…" on the button while the request is in-flight', async () => {
+    let resolvePost: (value: unknown) => void
+    mockedAxios.post.mockReturnValueOnce(new Promise((r) => { resolvePost = r }))
+
+    renderUpdateModal()
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    expect(screen.getByTestId('import-submit-button')).toHaveTextContent('Updating…')
+    expect(screen.getByTestId('import-submit-button')).toBeDisabled()
+
+    await waitFor(async () => resolvePost({ data: {} }))
+  })
+
+  it('shows a validation error if text is empty', async () => {
+    renderUpdateModal()
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+    expect(screen.getByTestId('import-validation-error')).toBeInTheDocument()
+    expect(client.post).not.toHaveBeenCalled()
+  })
+
+  it('shows API error banner when the request fails', async () => {
+    mockedAxios.post.mockRejectedValueOnce({
+      response: { data: { error: 'Deck not found' } },
+    })
+    renderUpdateModal()
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => expect(screen.getByTestId('import-api-error')).toBeInTheDocument())
+    expect(screen.getByTestId('import-api-error')).toHaveTextContent('Deck not found')
+  })
+
+  it('does not call onSuccess on failure', async () => {
+    mockedAxios.post.mockRejectedValueOnce({ response: { data: { error: 'Deck not found' } } })
+    const { onSuccess } = renderUpdateModal()
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => expect(screen.getByTestId('import-api-error')).toBeInTheDocument())
+    expect(onSuccess).not.toHaveBeenCalled()
   })
 })
