@@ -48,4 +48,18 @@ function validateImport(req, res, next) {
   next();
 }
 
-module.exports = { validateDeckName, validateImport };
+/**
+ * Validate the body of POST /api/decks/:id/import.
+ * Requires only `text` (non-empty string). No name needed — deck already exists.
+ */
+function validateUpdateImport(req, res, next) {
+  const { text } = req.body || {};
+
+  if (!text || typeof text !== 'string' || text.trim() === '') {
+    return res.status(400).json({ error: 'text is required and must be a non-empty string' });
+  }
+
+  next();
+}
+
+module.exports = { validateDeckName, validateImport, validateUpdateImport };
