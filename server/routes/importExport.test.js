@@ -518,17 +518,20 @@ describe('POST /api/decks/:id/import', () => {
   it('returns 400 when text is missing', async () => {
     const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({});
     expect(res.statusCode).toBe(400);
+    expect(res.body).toHaveProperty('error');
     expect(deckService.updateDeck).not.toHaveBeenCalled();
   });
 
   it('returns 400 when text is an empty string', async () => {
     const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: '' });
     expect(res.statusCode).toBe(400);
+    expect(res.body).toHaveProperty('error');
   });
 
   it('returns 400 when text is only whitespace', async () => {
     const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: '   ' });
     expect(res.statusCode).toBe(400);
+    expect(res.body).toHaveProperty('error');
   });
 
   it('returns 404 when the deck does not exist', async () => {
@@ -539,6 +542,7 @@ describe('POST /api/decks/:id/import', () => {
 
     const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
     expect(res.statusCode).toBe(404);
+    expect(res.body).toHaveProperty('error');
   });
 
   it('returns 500 when updateDeck throws an unexpected error', async () => {
@@ -558,6 +562,10 @@ describe('POST /api/decks/:id/import', () => {
 
     const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
     expect(res.statusCode).toBe(200);
+    const callArg = deckService.updateDeck.mock.calls[0][1];
+    expect(callArg.unknown).toEqual(
+      expect.arrayContaining(['Lightning Bolt', 'Smash to Smithereens']),
+    );
   });
 
   it('resolved cards are not placed in unknown[]', async () => {
