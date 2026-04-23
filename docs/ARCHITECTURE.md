@@ -33,7 +33,7 @@ A Magic: The Gathering deck management app. Decks, game logs, and snapshot histo
 
 | Layer | Choice | Rationale |
 |-------|--------|-----------|
-| Frontend | React 18 + Vite | Fast dev server, familiar, good ecosystem |
+| Frontend | React 19 + Vite | Fast dev server, familiar, good ecosystem. React Compiler enabled — automatic memoisation, no manual `useCallback`/`useMemo` needed. |
 | Styling | Tailwind CSS | Utility-first, no CSS file sprawl |
 | State | React Context + useReducer | Sufficient for this scope, no Redux overhead |
 | Backend | Express (Node) | Lightweight, handles file I/O and API proxy cleanly |
@@ -130,6 +130,7 @@ Sections separated by blank line (mainboard then sideboard).
 |--------|-------|-------------|
 | POST | `/api/decks/:id/export` | Generate MTGA-format text, return as string |
 | POST | `/api/import` | Parse MTGA-format text, create deck JSON |
+| POST | `/api/decks/:id/import` | Parse MTGA text, replace cards/sideboard on existing deck |
 
 ### Snapshots
 | Method | Route | Description |
@@ -155,6 +156,8 @@ Sections separated by blank line (mainboard then sideboard).
 - Notes textarea (auto-saves on blur)
 - Add card via search (opens card search panel)
 - Remove card / adjust quantity
+- Import button (opens ImportModal in create mode — creates new deck from MTGA text)
+- Update from MTGA button (opens ImportModal in update mode — replaces existing deck's card list, no name/format fields)
 - Export button (copies MTGA text to clipboard)
 - Snapshot timer: fires a `POST /snapshots` after 3 minutes of inactivity; also sends a best-effort `keepalive` snapshot on `beforeunload`
 
@@ -196,48 +199,81 @@ Cache flow:
 mtg-deck-manager/
 ├── client/                  # React frontend
 │   ├── src/
+│   │   ├── api/
+│   │   │   └── client.ts        # Axios instance with Firebase auth interceptor
 │   │   ├── components/
-│   │   │   ├── DeckCard.tsx
+│   │   │   ├── CardCompactView.tsx
+│   │   │   ├── CardDetailModal.tsx
+│   │   │   ├── CardGridView.tsx
+│   │   │   ├── CardImagePlaceholder.tsx
+│   │   │   ├── CardResultItem.tsx
 │   │   │   ├── CardRow.tsx
 │   │   │   ├── CardSearch.tsx
+│   │   │   ├── CloseButton.tsx
+│   │   │   ├── DeckCard.tsx
+│   │   │   ├── DeckHistory.tsx      # Snapshot timeline + pending diff
+│   │   │   ├── ErrorBoundary.tsx
+│   │   │   ├── FormatSelect.tsx
+│   │   │   ├── GameLogList.tsx
+│   │   │   ├── GameLogger.tsx
 │   │   │   ├── ImportModal.tsx
 │   │   │   ├── ImportPreview.tsx
-│   │   │   └── Spinner.tsx
+│   │   │   ├── LoginPage.tsx
+│   │   │   ├── SnapshotEntry.tsx    # One row in the history timeline
+│   │   │   ├── Spinner.tsx
+│   │   │   ├── ToastContainer.tsx
+│   │   │   └── UserAvatar.tsx
 │   │   ├── context/
-│   │   │   ├── DeckContext.tsx
+│   │   │   ├── AuthContext.tsx      # Firebase Auth state
+│   │   │   ├── DeckContext.tsx      # Global deck list state (useReducer)
 │   │   │   └── ToastContext.tsx
 │   │   ├── hooks/
+│   │   │   ├── useCards.ts
 │   │   │   ├── useDecks.ts
-│   │   │   └── useCards.ts
+│   │   │   ├── useGames.ts
+│   │   │   ├── useSnapshots.ts
+│   │   │   └── useToast.ts
 │   │   ├── pages/
 │   │   │   ├── DeckList.tsx
 │   │   │   └── DeckEditor.tsx
 │   │   ├── utils/
-│   │   │   └── mtgaFormat.ts   # MTGA text parsing/generation
+│   │   │   ├── index.ts
+│   │   │   └── mtgaFormat.ts    # MTGA text parsing/generation
+│   │   ├── firebase.ts          # Firebase app initialisation
+│   │   ├── types.ts
 │   │   ├── App.tsx
 │   │   └── main.tsx
+│   ├── eslint.config.js         # ESLint with react-compiler + react-hooks rules
 │   ├── index.html
 │   └── vite.config.js
 │
-├── server/                  # Express backend
+├── server/                  # Express backend (runs as Firebase Function)
+│   ├── functions/
+│   │   └── index.js         # Firebase Functions entry point
 │   ├── routes/
 │   │   ├── decks.js
 │   │   ├── cards.js
+│   │   ├── games.js
+│   │   ├── snapshots.js
 │   │   └── importExport.js
 │   ├── services/
-│   │   ├── deckService.js    # File I/O for deck JSON
-│   │   ├── cardService.js    # Scryfall fetch + cache logic
-│   │   └── mtgaService.js    # Import/export format logic
+│   │   ├── db.js            # Firebase Admin SDK singleton
+│   │   ├── deckService.js   # Firestore reads/writes for decks
+│   │   ├── gameService.js   # Game log CRUD
+│   │   ├── snapshotService.js
+│   │   ├── cardService.js   # Scryfall fetch + cache logic
+│   │   └── mtgaService.js   # Import/export format logic
 │   ├── middleware/
-│   │   └── rateLimiter.js    # Scryfall rate limit queue
+│   │   ├── rateLimiter.js   # Scryfall rate limit queue
+│   │   └── validate.js      # Request validation middleware
 │   └── index.js
 │
 ├── data/                    # Runtime data (gitignored)
-│   ├── decks/               # One JSON file per deck
-│   └── cache/               # Scryfall card cache
+│   └── cache/               # Scryfall card cache (7-day TTL)
 │
-├── ARCHITECTURE.md
-├── TASKS.md
+├── docs/                    # Architecture documentation
+├── firebase.json            # Firebase hosting, functions, emulator config
+├── firestore.rules
 └── package.json             # Workspaces: client + server
 ```
 
