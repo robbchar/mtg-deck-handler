@@ -46,28 +46,35 @@ cp server/.env.example server/.env
 # Default values work out of the box — edit only if you need non-standard ports
 ```
 
-### 3. Start both server and client
+### 3. Authenticate with Firebase
 
 ```bash
-# Start both concurrently (recommended for development)
-npm run dev
-
-# Or start the server only
-node server/index.js
+firebase login
 ```
 
-The server starts on **http://localhost:3001** by default.
-The Vite dev server starts on **http://localhost:5173** and proxies `/api`
-requests to the Express backend automatically.
+Or place a service account key at the path set in `GOOGLE_APPLICATION_CREDENTIALS` — see `server/.env.example` for details.
 
-The `data/decks/` and `data/cache/` directories are created automatically on
-first boot — no manual setup required.
-
-### 4. Verify it's running
+### 4. Start both server and client
 
 ```bash
-curl http://localhost:3001/health
-# → {"status":"ok"}
+npm run dev
+```
+
+This starts the Firebase emulators (Auth, Firestore, Functions, Hosting) and the Vite dev server concurrently.
+
+- Vite dev server: **http://localhost:5173**
+- Firebase Functions (API): **http://localhost:5001**
+- Firebase Emulator UI: **http://localhost:4000**
+
+All `/api` requests from the frontend are proxied through Vite to the Functions emulator automatically — no manual port wiring required.
+
+The `data/cache/` directory is created automatically on first boot for Scryfall card caching.
+
+### 5. Verify it's running
+
+```bash
+curl http://localhost:5173/api/decks
+# → []  (empty array on a fresh install)
 ```
 
 ## Environment Variables
@@ -76,9 +83,10 @@ All variables live in `server/.env` (copy from `server/.env.example`):
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `3001` | Express listen port |
-| `DATA_DIR` | `../data` | Path to the data directory (relative to `server/`) |
 | `SCRYFALL_RATE_LIMIT_MS` | `100` | Minimum ms between Scryfall requests (≤ 10 req/s) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | — | Path to a Firebase service account key (optional — ADC via `firebase login` works without it) |
+
+`PORT` and `DATA_DIR` are no longer used — the server runs as a Firebase Function and storage is Firestore.
 
 ## Running Tests
 
@@ -87,10 +95,10 @@ All variables live in `server/.env` (copy from `server/.env.example`):
 npm test
 
 # Server tests only
-cd server && npm test
+npm run test:server
 
 # Client tests only
-cd client && npm test
+npm run test:client
 ```
 
 ## Frontend
@@ -310,17 +318,15 @@ try {
 
 ## Deck Service (`server/services/deckService.js`)
 
-Provides all file I/O for deck management. Each deck is stored as a single JSON
-file at `data/decks/{uuid}.json`. All writes use an atomic tmp-then-rename
-pattern to prevent corrupt files on crash.
+Provides all Firestore reads/writes for deck management. Decks are stored as documents in the `/mtg-deck-handler/{deckId}` collection.
 
 | Function | Description |
 |---|---|
-| `listDecks()` | Returns an array of deck metadata (`id`, `name`, `format`, `notes`, `card_count`, `updated_at`). Never includes full card arrays. Safe on empty directory. |
-| `getDeck(id)` | Returns the full deck JSON. Throws `Error: Deck not found: {id}` if missing. |
-| `createDeck(data)` | Generates a UUID v4 id, sets `created_at`/`updated_at`, writes file, returns deck. |
-| `updateDeck(id, data)` | Merges `data` into the existing deck, bumps `updated_at`, writes file, returns updated deck. Throws if not found. |
-| `deleteDeck(id)` | Deletes the deck file, returns `{ deleted: true }`. Throws if not found. |
+| `listDecks()` | Returns an array of deck metadata (`id`, `name`, `format`, `notes`, `card_count`, `updated_at`). Never includes full card arrays. |
+| `getDeck(id)` | Returns the full deck document including `cards` and `sideboard`. Throws `Error: Deck not found: {id}` if missing. |
+| `createDeck(data)` | Creates a new Firestore document, sets `created_at`/`updated_at`, returns deck. |
+| `updateDeck(id, data)` | Merges `data` into the existing deck document, bumps `updated_at`, returns updated deck. Throws if not found. |
+| `deleteDeck(id)` | Deletes the deck document and all its subcollections, returns `{ deleted: true }`. Throws if not found. |
 
 ## MTGA Service (`server/services/mtgaService.js`)
 
@@ -373,7 +379,7 @@ Magic: The Gathering Arena for import/export.
 Returns an array of deck metadata (no card arrays).
 
 ```bash
-curl http://localhost:3001/api/decks
+curl http://localhost:5173/api/decks
 # → [{ "id": "...", "name": "Mono Red", "format": "Standard", "card_count": 20, "updated_at": "..." }]
 ```
 
@@ -381,7 +387,7 @@ curl http://localhost:3001/api/decks
 Returns the full deck JSON including `cards` and `sideboard`.
 
 ```bash
-curl http://localhost:3001/api/decks/<uuid>
+curl http://localhost:5173/api/decks/<uuid>
 # 200 → full deck object
 # 404 → { "error": "Deck not found: <uuid>" }
 ```
@@ -390,7 +396,7 @@ curl http://localhost:3001/api/decks/<uuid>
 Creates a new deck. `name` is required.
 
 ```bash
-curl -X POST http://localhost:3001/api/decks \
+curl -X POST http://localhost:5173/api/decks \
   -H 'Content-Type: application/json' \
   -d '{ "name": "Mono Red Burn", "format": "Standard" }'
 # 201 → created deck object
@@ -401,7 +407,7 @@ curl -X POST http://localhost:3001/api/decks \
 Merges the request body into the existing deck. `id` and `created_at` are immutable.
 
 ```bash
-curl -X PUT http://localhost:3001/api/decks/<uuid> \
+curl -X PUT http://localhost:5173/api/decks/<uuid> \
   -H 'Content-Type: application/json' \
   -d '{ "notes": "Updated notes" }'
 # 200 → updated deck object
@@ -411,7 +417,7 @@ curl -X PUT http://localhost:3001/api/decks/<uuid> \
 #### `DELETE /api/decks/:id`
 
 ```bash
-curl -X DELETE http://localhost:3001/api/decks/<uuid>
+curl -X DELETE http://localhost:5173/api/decks/<uuid>
 # 200 → { "deleted": true }
 # 404 → { "error": "Deck not found: <uuid>" }
 ```
@@ -424,7 +430,7 @@ individually at `data/cache/{id}.json` (7-day TTL). A query that matches
 no cards returns an empty array — not a 404.
 
 ```bash
-curl "http://localhost:3001/api/cards/search?q=lightning+bolt"
+curl "http://localhost:5173/api/cards/search?q=lightning+bolt"
 # 200 → [ { "id": "...", "name": "Lightning Bolt", ... }, ... ]
 # 200 → []   (no matches — empty array, not 404)
 # 400 → { "error": "query parameter q is required" }   (missing/blank q)
@@ -435,7 +441,7 @@ curl "http://localhost:3001/api/cards/search?q=lightning+bolt"
 Returns a single card by Scryfall UUID, using the local cache when fresh.
 
 ```bash
-curl http://localhost:3001/api/cards/5f8287b1-5bb6-5f4c-ad17-316a40d5bb0c
+curl http://localhost:5173/api/cards/5f8287b1-5bb6-5f4c-ad17-316a40d5bb0c
 # 200 → { "id": "...", "name": "Lightning Bolt", ... }
 # 404 → { "error": "Card not found: <id>" }
 # 429 → { "error": "Scryfall rate limit exceeded. Please retry shortly." }
@@ -455,7 +461,7 @@ Cards not yet resolved via Scryfall appear in the `unknown[]` array on the
 returned deck — this does not block the import.
 
 ```bash
-curl -X POST http://localhost:3001/api/import \
+curl -X POST http://localhost:5173/api/import \
   -H 'Content-Type: application/json' \
   -d '{
     "text": "4 Lightning Bolt\n2 Mountain\n\n2 Smash to Smithereens",
@@ -471,7 +477,7 @@ curl -X POST http://localhost:3001/api/import \
 Returns the deck formatted as MTGA plain text.
 
 ```bash
-curl -X POST http://localhost:3001/api/decks/<uuid>/export
+curl -X POST http://localhost:5173/api/decks/<uuid>/export
 # 200 → { "text": "4 Lightning Bolt\n2 Mountain\n\n2 Smash to Smithereens" }
 # 404 → { "error": "Deck not found: <uuid>" }
 ```
@@ -538,3 +544,7 @@ made within the debounce window before navigation were silently lost.
    no in-flight changes are ever discarded on navigation. A `updateDeckRef` is
    kept in sync via a layout-free effect so the cleanup always has access to the
    latest `updateDeck` function without creating stale closures.
+
+** Future Features **
+- when importing new changes for a deck make that into a new snapshot immediately
+- some sort of way to run simulations of how the deck would work
