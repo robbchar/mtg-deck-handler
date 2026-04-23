@@ -16,17 +16,17 @@ interface ImportModalProps {
 }
 
 /**
- * ImportModal — paste MTGA deck text, preview the parsed result, then import.
+ * ImportModal — paste MTGA deck text, preview the parsed result, then import or update.
+ *
+ * Modes:
+ *   - 'create' (default): Requires a deck name. POSTs to /api/import and navigates
+ *     to the new deck editor on success.
+ *   - 'update': No name/format fields shown. POSTs to /api/decks/:deckId/import,
+ *     calls onSuccess() (e.g. to reload the deck), then closes.
  *
  * - "Preview" parses client-side (no network) and shows card count + unknown lines.
- * - "Import Deck" POSTs to /api/import and navigates to the editor on success.
  * - Closes on Escape, backdrop click, or the × button.
  * - All state resets when closed.
- *
- * Architecture note: preview is intentionally client-side (no dryRun API param)
- * because the POST /api/import spec does not define a dry-run mode. The client
- * utility parseMtgaText mirrors the server-side parser precisely so previews
- * are accurate without a round-trip.
  */
 function ImportModal({ isOpen, onClose, mode = 'create', deckId, onSuccess }: ImportModalProps) {
   const navigate = useNavigate()
@@ -98,6 +98,10 @@ function ImportModal({ isOpen, onClose, mode = 'create', deckId, onSuccess }: Im
 
     try {
       if (mode === 'update') {
+        if (!deckId) {
+          setApiError('No deck ID provided for update.')
+          return
+        }
         await client.post(`/api/decks/${deckId}/import`, { text })
         onSuccess?.()
         onClose()
