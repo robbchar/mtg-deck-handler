@@ -639,7 +639,7 @@ describe('ImportModal — update mode: submit behaviour', () => {
   })
 
   it('shows "Updating…" on the button while the request is in-flight', async () => {
-    let resolvePost: (value: unknown) => void
+    let resolvePost!: (value: unknown) => void
     mockedAxios.post.mockReturnValueOnce(new Promise((r) => { resolvePost = r }))
 
     renderUpdateModal()
@@ -651,6 +651,7 @@ describe('ImportModal — update mode: submit behaviour', () => {
 
     await waitFor(async () => resolvePost({ data: {} }))
   })
+
 
   it('shows a validation error if text is empty', async () => {
     renderUpdateModal()
