@@ -10,6 +10,9 @@ import type { ParsedDeck } from '../types'
 interface ImportModalProps {
   isOpen: boolean
   onClose: () => void
+  mode?: 'create' | 'update'
+  deckId?: string
+  onSuccess?: () => void
 }
 
 /**
@@ -25,7 +28,7 @@ interface ImportModalProps {
  * utility parseMtgaText mirrors the server-side parser precisely so previews
  * are accurate without a round-trip.
  */
-function ImportModal({ isOpen, onClose }: ImportModalProps) {
+function ImportModal({ isOpen, onClose, mode = 'create', deckId, onSuccess }: ImportModalProps) {
   const navigate = useNavigate()
 
   const [text, setText] = useState('')
@@ -84,7 +87,7 @@ function ImportModal({ isOpen, onClose }: ImportModalProps) {
       setValidationError('Paste some MTGA deck text before importing.')
       return
     }
-    if (!deckName.trim()) {
+    if (mode === 'create' && !deckName.trim()) {
       setValidationError('Deck name is required.')
       return
     }
@@ -94,13 +97,19 @@ function ImportModal({ isOpen, onClose }: ImportModalProps) {
     setImporting(true)
 
     try {
-      const { data } = await client.post<{ id: string }>('/api/import', {
-        text,
-        name: deckName.trim(),
-        format: format.trim(),
-      })
-      onClose()
-      navigate(`/deck/${data.id}`)
+      if (mode === 'update') {
+        await client.post(`/api/decks/${deckId}/import`, { text })
+        onSuccess?.()
+        onClose()
+      } else {
+        const { data } = await client.post<{ id: string }>('/api/import', {
+          text,
+          name: deckName.trim(),
+          format: format.trim(),
+        })
+        onClose()
+        navigate(`/deck/${data.id}`)
+      }
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } }; message?: string }
       setApiError(e?.response?.data?.error ?? e?.message ?? 'Import failed. Please try again.')
@@ -132,7 +141,7 @@ function ImportModal({ isOpen, onClose }: ImportModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h2 id="import-modal-title" className="text-lg font-semibold text-gray-900">
-            Import Deck
+            {mode === 'update' ? 'Update Deck' : 'Import Deck'}
           </h2>
           <CloseButton
             onClick={onClose}
@@ -144,36 +153,40 @@ function ImportModal({ isOpen, onClose }: ImportModalProps) {
 
         {/* Body */}
         <div className="space-y-4 px-6 py-5">
-          {/* Deck name */}
-          <div>
-            <label htmlFor="import-deck-name" className="mb-1 block text-sm font-medium text-gray-700">
-              Deck Name
-            </label>
-            <input
-              id="import-deck-name"
-              type="text"
-              value={deckName}
-              onChange={(e) => { setDeckName(e.target.value); setValidationError('') }}
-              placeholder="My Awesome Deck"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              data-testid="import-deck-name"
-            />
-          </div>
+          {mode === 'create' && (
+            <>
+              {/* Deck name */}
+              <div>
+                <label htmlFor="import-deck-name" className="mb-1 block text-sm font-medium text-gray-700">
+                  Deck Name
+                </label>
+                <input
+                  id="import-deck-name"
+                  type="text"
+                  value={deckName}
+                  onChange={(e) => { setDeckName(e.target.value); setValidationError('') }}
+                  placeholder="My Awesome Deck"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  data-testid="import-deck-name"
+                />
+              </div>
 
-          {/* Format (optional) */}
-          <div>
-            <label htmlFor="import-format" className="mb-1 block text-sm font-medium text-gray-700">
-              Format{' '}
-              <span className="font-normal text-gray-400">(optional)</span>
-            </label>
-            <FormatSelect
-              id="import-format"
-              value={format}
-              onChange={(e) => setFormat(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              data-testid="import-format"
-            />
-          </div>
+              {/* Format (optional) */}
+              <div>
+                <label htmlFor="import-format" className="mb-1 block text-sm font-medium text-gray-700">
+                  Format{' '}
+                  <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <FormatSelect
+                  id="import-format"
+                  value={format}
+                  onChange={(e) => setFormat(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  data-testid="import-format"
+                />
+              </div>
+            </>
+          )}
 
           {/* MTGA textarea */}
           <div>
@@ -233,7 +246,9 @@ function ImportModal({ isOpen, onClose }: ImportModalProps) {
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="import-submit-button"
           >
-            {importing ? 'Importing…' : 'Import Deck'}
+            {importing
+              ? (mode === 'update' ? 'Updating…' : 'Importing…')
+              : (mode === 'update' ? 'Update Deck' : 'Import Deck')}
           </button>
         </div>
       </div>
