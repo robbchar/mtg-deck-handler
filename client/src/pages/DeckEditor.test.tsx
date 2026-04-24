@@ -755,4 +755,53 @@ describe('DeckEditor — flushSnapshot (pre-import flush)', () => {
     const urls = mockedClient.post.mock.calls.map(([url]) => url)
     expect(urls).not.toContain('/api/decks/test-deck-id/snapshots')
   })
+
+  it('prunes forward snapshot history before flushing when the user previously reverted', async () => {
+    mockedClient.delete.mockResolvedValue({ data: { deleted: 1 } })
+    mockedClient.post.mockResolvedValue({
+      data: { id: 'snap-flushed', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' },
+    })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Simulate a revert (mock DeckHistory fires onRevert with snap-1)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('tab-history'))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /mock revert/i }))
+    })
+
+    // Arm the snapshot timer via a format change post-revert
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'modern' } })
+    })
+
+    // Open the update modal, switch to real timers
+    fireEvent.click(screen.getByTestId('update-from-mtga-btn'))
+    vi.useRealTimers()
+
+    await waitFor(() => screen.getByTestId('import-modal'))
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: '4 Lightning Bolt' } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    // Prune delete must have been called before the snapshot POST
+    await waitFor(() =>
+      expect(mockedClient.delete).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/decks\/.+\/snapshots\/after\/snap-1/),
+      ),
+    )
+    await waitFor(() =>
+      expect(mockedClient.post).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/decks\/.+\/snapshots$/),
+        expect.any(Object),
+      ),
+    )
+    const deleteCalls = mockedClient.delete.mock.invocationCallOrder
+    const postCalls = mockedClient.post.mock.invocationCallOrder
+    expect(Math.min(...deleteCalls)).toBeLessThan(Math.min(...postCalls))
+  })
 })

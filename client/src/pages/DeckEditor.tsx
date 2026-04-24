@@ -192,6 +192,14 @@ function DeckEditor() {
       clearTimeout(snapshotTimerRef.current)
       snapshotTimerRef.current = null
     }
+    if (revertedToSnapshotIdRef.current) {
+      try {
+        await client.delete(`/api/decks/${id}/snapshots/after/${revertedToSnapshotIdRef.current}`)
+      } catch (pruneErr) {
+        console.error('Timeline prune failed silently:', pruneErr)
+      }
+      revertedToSnapshotIdRef.current = null
+    }
     try {
       const { data: newSnapshot } = await client.post<DeckSnapshot>(
         `/api/decks/${id}/snapshots`,
@@ -748,8 +756,11 @@ function DeckEditor() {
         deckId={id}
         onBeforeSubmit={flushSnapshot}
         onSuccess={() => {
+          if (snapshotTimerRef.current) {
+            clearTimeout(snapshotTimerRef.current)
+            snapshotTimerRef.current = null
+          }
           reloadDeck()
-          snapshotTimerRef.current = null
         }}
       />
 
