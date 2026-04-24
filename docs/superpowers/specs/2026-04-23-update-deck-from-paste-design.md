@@ -15,7 +15,7 @@ Users maintain decks in Magic: The Gathering Arena (MTGA) and want to track them
 
 - Paste an MTGA-format deck list into an existing deck → full replace of `cards` and `sideboard`
 - `name`, `format`, and `notes` are left untouched
-- The existing snapshot system captures the previous state automatically (no new snapshot logic needed)
+- Import immediately creates a snapshot of the post-import state; any pending client-side snapshot timer is flushed first to preserve the pre-import state
 - No diff/partial-update mode — always a full replace
 
 Out of scope for this feature:
@@ -35,18 +35,20 @@ Out of scope for this feature:
 3. Resolve all cards concurrently via existing `resolveCardEntry` helper
 4. Build `unknown[]` from unresolved cards (same pattern as create flow)
 5. Call `updateDeck(id, { cards, sideboard, unknown })`
-6. Return updated deck as `200`
+6. Call `createSnapshot(id, { cards, sideboard, format, notes })` — `format` and `notes` are read from the deck doc (returned by `updateDeck` or fetched prior); this mirrors what the client sends on a timer-fired snapshot and sets `activeSnapshotId` on the deck
+7. Return updated deck as `200`
 
 The route lives in `server/routes/importExport.js` alongside the existing `POST /api/import`.
 
 ### Frontend: ImportModal changes
 
-Add two props:
+Add three props:
 
 ```ts
-mode?: 'create' | 'update'  // defaults to 'create'
-deckId?: string             // required when mode === 'update'
-onSuccess?: () => void      // called after successful update, before onClose
+mode?: 'create' | 'update'        // defaults to 'create'
+deckId?: string                   // required when mode === 'update'
+onBeforeSubmit?: () => Promise<void>  // awaited before the import fetch; used in update mode to flush pending snapshot
+onSuccess?: () => void            // called after successful update, before onClose
 ```
 
 Behaviour differences in `update` mode:
@@ -65,6 +67,7 @@ Preview behaviour (client-side parse) is identical in both modes.
 ### Frontend: DeckEditor integration
 
 - Extract the deck load logic (currently inlined in `useEffect`) into a named `reloadDeck` function callable both on mount and on demand.
+- Add a `flushSnapshot()` function: cancels `snapshotTimerRef`, and if a timer was active, immediately POSTs `snapshotDataRef.current` to `POST /api/decks/:id/snapshots`.
 - Add an **"Update from MTGA"** button in the toolbar next to the Export button.
 - Wire up `ImportModal` in update mode:
 
@@ -74,7 +77,11 @@ Preview behaviour (client-side parse) is identical in both modes.
   onClose={() => setIsUpdateModalOpen(false)}
   mode="update"
   deckId={id}
-  onSuccess={reloadDeck}
+  onBeforeSubmit={flushSnapshot}
+  onSuccess={() => {
+    reloadDeck()
+    snapshotTimerRef.current = null  // ensure timer ref is clean after flush+import
+  }}
 />
 ```
 
@@ -85,12 +92,15 @@ Preview behaviour (client-side parse) is identical in both modes.
 ```
 User pastes MTGA text → Preview (client-side parse, no network)
 → "Update Deck" clicked
+→ onBeforeSubmit() → flushSnapshot()
+    → if timer pending: cancel timer, POST /api/decks/:id/snapshots (pre-import state)
 → POST /api/decks/:id/import
   → parseMtgaText
   → resolveCardEntry × N (Scryfall, rate-limited)
   → updateDeck (Firestore write)
+  → createSnapshot (post-import state, sets activeSnapshotId)
 → 200 response
-→ onSuccess() → reloadDeck() (GET /api/decks/:id)
+→ onSuccess() → reloadDeck() (GET /api/decks/:id), clear snapshotTimerRef
 → onClose() → modal dismissed, editor shows updated cards
 ```
 
@@ -106,6 +116,6 @@ User pastes MTGA text → Preview (client-side parse, no network)
 
 ## Testing
 
-- `ImportModal`: new test suite for `mode="update"` — verify hidden fields, correct endpoint called, `onSuccess` invoked, no navigation
-- `POST /api/decks/:id/import` route: unit tests mirroring `POST /api/import` tests — valid input, empty text, Scryfall resolution stubbed
-- `DeckEditor`: test that "Update from MTGA" button opens the modal in update mode; test that `reloadDeck` is called on success
+- `ImportModal`: new test suite for `mode="update"` — verify hidden fields, correct endpoint called, `onBeforeSubmit` awaited before fetch, `onSuccess` invoked, no navigation
+- `POST /api/decks/:id/import` route: unit tests mirroring `POST /api/import` tests — valid input, empty text, Scryfall resolution stubbed; additionally verify `createSnapshot` is called with the resolved cards and existing deck `format`/`notes`
+- `DeckEditor`: test that "Update from MTGA" button opens the modal in update mode; test that `flushSnapshot` fires an immediate snapshot when a timer is pending; test that `flushSnapshot` is a no-op when no timer is pending; test that `reloadDeck` is called on success and timer ref is cleared
