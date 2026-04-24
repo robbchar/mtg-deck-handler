@@ -61,16 +61,29 @@ function renderModal({ isOpen = true, onClose = vi.fn() } = {}) {
   )
 }
 
-function renderUpdateModal(overrides: Partial<{ deckId: string; onClose: () => void; onSuccess: () => void }> = {}) {
+function renderUpdateModal(overrides: Partial<{
+  deckId: string
+  onClose: () => void
+  onSuccess: () => void
+  onBeforeSubmit: () => Promise<void>
+}> = {}) {
   const onClose = overrides.onClose ?? vi.fn()
   const onSuccess = overrides.onSuccess ?? vi.fn()
+  const onBeforeSubmit = overrides.onBeforeSubmit ?? vi.fn().mockResolvedValue(undefined)
   const deckId = overrides.deckId ?? 'deck-update-001'
   render(
     <MemoryRouter>
-      <ImportModal isOpen={true} onClose={onClose} mode="update" deckId={deckId} onSuccess={onSuccess} />
+      <ImportModal
+        isOpen={true}
+        onClose={onClose}
+        mode="update"
+        deckId={deckId}
+        onSuccess={onSuccess}
+        onBeforeSubmit={onBeforeSubmit}
+      />
     </MemoryRouter>,
   )
-  return { onClose, onSuccess }
+  return { onClose, onSuccess, onBeforeSubmit }
 }
 
 beforeEach(() => {
@@ -682,5 +695,38 @@ describe('ImportModal — update mode: submit behaviour', () => {
 
     await waitFor(() => expect(screen.getByTestId('import-api-error')).toBeInTheDocument())
     expect(onSuccess).not.toHaveBeenCalled()
+  })
+})
+
+// ── Update mode — onBeforeSubmit ──────────────────────────────────────────────
+
+describe('ImportModal — update mode: onBeforeSubmit', () => {
+  it('calls onBeforeSubmit before the import API request', async () => {
+    let beforeSubmitSettled = false
+    const onBeforeSubmit = vi.fn().mockImplementation(async () => {
+      beforeSubmitSettled = true
+    })
+    mockedAxios.post.mockImplementation(async () => {
+      expect(beforeSubmitSettled).toBe(true)
+      return { data: {} }
+    })
+
+    renderUpdateModal({ onBeforeSubmit })
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: VALID_TEXT } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => expect(onBeforeSubmit).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(client.post).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not call onBeforeSubmit when text validation fails', async () => {
+    const onBeforeSubmit = vi.fn().mockResolvedValue(undefined)
+    renderUpdateModal({ onBeforeSubmit })
+
+    // Submit with empty textarea — validation should fail before onBeforeSubmit runs
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    expect(onBeforeSubmit).not.toHaveBeenCalled()
+    expect(client.post).not.toHaveBeenCalled()
   })
 })

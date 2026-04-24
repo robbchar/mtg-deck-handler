@@ -12,6 +12,7 @@ interface ImportModalProps {
   onClose: () => void
   mode?: 'create' | 'update'
   deckId?: string
+  onBeforeSubmit?: () => Promise<void>
   onSuccess?: () => void
 }
 
@@ -28,7 +29,7 @@ interface ImportModalProps {
  * - Closes on Escape, backdrop click, or the × button.
  * - All state resets when closed.
  */
-function ImportModal({ isOpen, onClose, mode = 'create', deckId, onSuccess }: ImportModalProps) {
+function ImportModal({ isOpen, onClose, mode = 'create', deckId, onBeforeSubmit, onSuccess }: ImportModalProps) {
   const navigate = useNavigate()
 
   const [text, setText] = useState('')
@@ -102,6 +103,7 @@ function ImportModal({ isOpen, onClose, mode = 'create', deckId, onSuccess }: Im
           setApiError('No deck ID provided for update.')
           return
         }
+        await onBeforeSubmit?.()
         await client.post(`/api/decks/${deckId}/import`, { text })
         onSuccess?.()
         onClose()
