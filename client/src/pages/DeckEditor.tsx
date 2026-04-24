@@ -185,6 +185,32 @@ function DeckEditor() {
     }, SNAPSHOT_WINDOW_MS)
   }
 
+  async function flushSnapshot(): Promise<void> {
+    if (!snapshotPendingRef.current || !id) return
+    snapshotPendingRef.current = false
+    if (snapshotTimerRef.current) {
+      clearTimeout(snapshotTimerRef.current)
+      snapshotTimerRef.current = null
+    }
+    if (revertedToSnapshotIdRef.current) {
+      try {
+        await client.delete(`/api/decks/${id}/snapshots/after/${revertedToSnapshotIdRef.current}`)
+      } catch (pruneErr) {
+        console.error('Timeline prune failed silently:', pruneErr)
+      }
+      revertedToSnapshotIdRef.current = null
+    }
+    try {
+      const { data: newSnapshot } = await client.post<DeckSnapshot>(
+        `/api/decks/${id}/snapshots`,
+        snapshotDataRef.current,
+      )
+      setActiveSnapshotId(newSnapshot.id)
+    } catch (err) {
+      console.error('Pre-import snapshot flush failed:', err)
+    }
+  }
+
   // On unmount (navigation), flush any pending debounced save immediately so
   // no changes are silently discarded when the user navigates away.
   useEffect(
@@ -728,7 +754,14 @@ function DeckEditor() {
         onClose={() => setIsUpdateModalOpen(false)}
         mode="update"
         deckId={id}
-        onSuccess={reloadDeck}
+        onBeforeSubmit={flushSnapshot}
+        onSuccess={() => {
+          if (snapshotTimerRef.current) {
+            clearTimeout(snapshotTimerRef.current)
+            snapshotTimerRef.current = null
+          }
+          reloadDeck()
+        }}
       />
 
       {/* ── Card detail modal ── */}

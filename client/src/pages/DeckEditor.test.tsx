@@ -695,3 +695,113 @@ describe('DeckEditor — timeline pruning', () => {
     vi.useRealTimers()
   })
 })
+
+describe('DeckEditor — flushSnapshot (pre-import flush)', () => {
+  it('posts a snapshot immediately when a timer is pending and the import is submitted', async () => {
+    mockedClient.post.mockResolvedValue({
+      data: { id: 'snap-flushed', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' },
+    })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Arm the snapshot timer via a format change
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'modern' } })
+    })
+
+    // Open the update modal, then switch back to real timers for async operations
+    fireEvent.click(screen.getByTestId('update-from-mtga-btn'))
+    vi.useRealTimers()
+
+    await waitFor(() => screen.getByTestId('import-modal'))
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: '4 Lightning Bolt' } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() => {
+      const urls = mockedClient.post.mock.calls.map(([url]) => url)
+      expect(urls).toContain('/api/decks/test-deck-id/snapshots')
+    })
+
+    // Snapshot must precede import
+    const urls = mockedClient.post.mock.calls.map(([url]) => url)
+    const snapIdx = urls.findIndex((u) => u === '/api/decks/test-deck-id/snapshots')
+    const importIdx = urls.findIndex((u) => u === '/api/decks/test-deck-id/import')
+    expect(snapIdx).toBeGreaterThanOrEqual(0)
+    expect(importIdx).toBeGreaterThan(snapIdx)
+  })
+
+  it('does not post a snapshot before import when no timer is pending', async () => {
+    mockedClient.post.mockResolvedValue({ data: {} })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    // Open update modal WITHOUT any prior edits (no pending timer)
+    fireEvent.click(screen.getByTestId('update-from-mtga-btn'))
+    await waitFor(() => screen.getByTestId('import-modal'))
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: '4 Lightning Bolt' } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    await waitFor(() =>
+      expect(mockedClient.post).toHaveBeenCalledWith(
+        '/api/decks/test-deck-id/import',
+        expect.objectContaining({ text: '4 Lightning Bolt' }),
+      ),
+    )
+
+    const urls = mockedClient.post.mock.calls.map(([url]) => url)
+    expect(urls).not.toContain('/api/decks/test-deck-id/snapshots')
+  })
+
+  it('prunes forward snapshot history before flushing when the user previously reverted', async () => {
+    mockedClient.delete.mockResolvedValue({ data: { deleted: 1 } })
+    mockedClient.post.mockResolvedValue({
+      data: { id: 'snap-flushed', createdAt: new Date().toISOString(), cards: [], sideboard: [], format: '', notes: '' },
+    })
+    renderEditor()
+    await waitFor(() => screen.getByTestId('deck-editor'))
+
+    vi.useFakeTimers()
+
+    // Simulate a revert (mock DeckHistory fires onRevert with snap-1)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('tab-history'))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /mock revert/i }))
+    })
+
+    // Arm the snapshot timer via a format change post-revert
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('deck-format-select'), { target: { value: 'modern' } })
+    })
+
+    // Open the update modal, switch to real timers
+    fireEvent.click(screen.getByTestId('update-from-mtga-btn'))
+    vi.useRealTimers()
+
+    await waitFor(() => screen.getByTestId('import-modal'))
+
+    fireEvent.change(screen.getByTestId('import-textarea'), { target: { value: '4 Lightning Bolt' } })
+    fireEvent.click(screen.getByTestId('import-submit-button'))
+
+    // Prune delete must have been called before the snapshot POST
+    await waitFor(() =>
+      expect(mockedClient.delete).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/decks\/.+\/snapshots\/after\/snap-1/),
+      ),
+    )
+    await waitFor(() =>
+      expect(mockedClient.post).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/decks\/.+\/snapshots$/),
+        expect.any(Object),
+      ),
+    )
+    const deleteCalls = mockedClient.delete.mock.invocationCallOrder
+    const postCalls = mockedClient.post.mock.invocationCallOrder
+    expect(Math.min(...deleteCalls)).toBeLessThan(Math.min(...postCalls))
+  })
+})

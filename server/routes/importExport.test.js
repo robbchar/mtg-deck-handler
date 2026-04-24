@@ -12,10 +12,12 @@ const request = require('supertest');
 jest.mock('../services/deckService');
 jest.mock('../services/mtgaService');
 jest.mock('../services/cardService');
+jest.mock('../services/snapshotService');
 
 const deckService = require('../services/deckService');
 const mtgaService = require('../services/mtgaService');
 const cardService = require('../services/cardService');
+const snapshotService = require('../services/snapshotService');
 const app = require('../index');
 
 const MOCK_DECK = {
@@ -42,6 +44,14 @@ beforeEach(() => {
   // Default: no Scryfall results — all cards remain unresolved (scryfall_id: null).
   cardService.searchCards.mockResolvedValue([]);
   cardService.getCardBySetCollector.mockResolvedValue(null);
+  snapshotService.createSnapshot.mockResolvedValue({
+    id: 'snap-import-1',
+    createdAt: new Date().toISOString(),
+    cards: [],
+    sideboard: [],
+    format: '',
+    notes: '',
+  });
 });
 
 // ── POST /api/decks/:id/export ─────────────────────────────────────────────────
@@ -587,5 +597,40 @@ describe('POST /api/decks/:id/import', () => {
 
     const callArg = deckService.updateDeck.mock.calls[0][1];
     expect(callArg.unknown).not.toContain('Lightning Bolt');
+  });
+
+  it('calls createSnapshot after a successful import', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+
+    expect(snapshotService.createSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls createSnapshot with resolved cards and the deck format and notes', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+
+    await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+
+    expect(snapshotService.createSnapshot).toHaveBeenCalledWith(
+      DECK_ID,
+      expect.objectContaining({
+        cards: expect.any(Array),
+        sideboard: expect.any(Array),
+        format: MOCK_DECK.format,
+        notes: MOCK_DECK.notes,
+      }),
+    );
+  });
+
+  it('returns 500 when createSnapshot throws', async () => {
+    mtgaService.parseMtgaText.mockReturnValue(PARSED);
+    deckService.updateDeck.mockResolvedValue(MOCK_DECK);
+    snapshotService.createSnapshot.mockRejectedValue(new Error('Firestore snapshot failure'));
+
+    const res = await request(app).post(`/api/decks/${DECK_ID}/import`).send({ text: MTGA_TEXT });
+    expect(res.statusCode).toBe(500);
   });
 });
