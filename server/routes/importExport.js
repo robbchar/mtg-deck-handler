@@ -12,6 +12,7 @@ const { Router } = require('express');
 const { getDeck, createDeck, updateDeck } = require('../services/deckService');
 const { exportDeck, parseMtgaText } = require('../services/mtgaService');
 const { getCard, searchCards, getCardBySetCollector } = require('../services/cardService');
+const { createSnapshot } = require('../services/snapshotService');
 const { validateImport, validateUpdateImport } = require('../middleware/validate');
 
 const router = Router();
@@ -159,7 +160,8 @@ router.post('/import', validateImport, async (req, res) => {
  *   2. Call parseMtgaText(text) → { mainboard, sideboard }.
  *   3. Resolve all cards via resolveCardEntry (Scryfall, rate-limited).
  *   4. Call updateDeck(id, { cards, sideboard, unknown }).
- *   5. Return the updated deck as 200.
+ *   5. Call createSnapshot(id, { cards, sideboard, format, notes }).
+ *   6. Return the updated deck as 200.
  *
  * @route   POST /api/decks/:id/import
  * @returns {200} Full deck JSON
@@ -184,6 +186,7 @@ router.post('/decks/:id/import', validateUpdateImport, async (req, res) => {
       .map((c) => c.name);
 
     const deck = await updateDeck(id, { cards, sideboard: sideboardCards, unknown });
+    await createSnapshot(id, { cards, sideboard: sideboardCards, format: deck.format, notes: deck.notes });
 
     res.json(deck);
   } catch (err) {
